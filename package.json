@@ -1,0 +1,47 @@
+{
+  "name": "matrixrn",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "start": "react-native start",
+    "test": "jest",
+    "lint": "eslint .",
+    "postinstall": "sed -i '' '$s/}/,\"browser\":{\"fs\":\"react-native-level-fs\"}}/' node_modules/olm/package.json"
+  },
+  "dependencies": {
+    "@react-native-community/async-storage": "^1.12.1",
+    "@react-navigation/native": "^6.0.11",
+    "@react-navigation/native-stack": "^6.7.0",
+    "node-libs-react-native": "^1.2.1",
+    "observable-hooks": "^4.2.0",
+    "react": "17.0.1",
+    "react-native": "0.64.2",
+    "react-native-config": "^1.4.6",
+    "react-native-level-fs": "^3.0.1",
+    "react-native-localize": "^2.2.3",
+    "react-native-randombytes": "^3.6.1",
+    "react-native-safe-area-context": "^4.3.3",
+    "react-native-screens": "^3.16.0",
+    "react-native-vector-icons": "^9.2.0",
+    "react-native-fs": "^2.16.6",
+    "react-native-gesture-handler": "^1.7.0",
+    "react-native-reanimated": "^1.13.0",
+    "matrix-js-sdk": "^12.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "7.13.16",
+    "@babel/runtime": "^7.13.17",
+    "@react-native-community/eslint-config": "2.0.0",
+    "babel-jest": "26.6.3",
+    "eslint": "7.14.0",
+    "jest": "26.6.3",
+    "metro-react-native-babel-preset": "0.64.0",
+    "react-native-codegen": "^0.0.12",
+    "react-test-renderer": "17.0.1"
+  },
+  "jest": {
+    "preset": "react-native"
+  }
+}
