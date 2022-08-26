@@ -1,7 +1,7 @@
 import {StyleSheet, useColorScheme} from 'react-native';
 import {Colors} from 'react-native/Libraries/NewAppScreen';
 
-console.log('THE COLORS', Colors);
+// console.log('THE COLORS', Colors);
 
 const styles = isDarkMode =>
   StyleSheet.create({
@@ -55,6 +55,21 @@ const styles = isDarkMode =>
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    ROOM: {
+      paddingHorizontal: 20,
+      height: 70,
+      backgroundColor: '#E5E5E5',
+      borderBottomColor: '#000000',
+      borderBottomWidth: 1,
+    },
+    ROOM_NAME: {
+      fontSize: 20,
+      fontWeight: '800',
+    },
+    ROOM_MESSAGE: {
+      fontSize: 12,
+      fontWeight: '300',
     },
   });
 

@@ -2,7 +2,7 @@ import {Dimensions, StyleSheet, useColorScheme} from 'react-native';
 import {Colors} from 'react-native/Libraries/NewAppScreen';
 import {calculateWidth} from '../../Utils/Styling';
 
-console.log('THE COLORS', Colors);
+// console.log('THE COLORS', Colors);
 
 const styles = (isDarkMode, size) =>
   StyleSheet.create({

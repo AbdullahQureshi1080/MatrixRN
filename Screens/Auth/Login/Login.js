@@ -17,14 +17,17 @@ import {initialUser, userReducer} from '../../../Store/User';
 
 import Config from 'react-native-config';
 
-import {matrix} from '@rn-matrix/core';
 import {initialLoad, loadReducer} from '../../../Store/Load';
 import {useNavigation} from '@react-navigation/native';
 import {storeUserMatrixData} from '../../../Utils/Storage';
-import {observer} from 'mobx-react-lite';
-import {getSnapshot} from 'mobx-state-tree';
-import {RootStore} from '../../../Store/AppStore';
+
 import {loginUser, useUserContext} from '../../../Context/AppContext';
+
+// import matrix from '../../../App';
+// import MatrixService from '../../../Services/MatrixChatService';
+
+import matrix from '../../../App';
+import MatrixService from '../../../Services/MatrixChatService';
 
 function Login(props) {
   const {store, dispatch} = useUserContext();
@@ -45,8 +48,13 @@ function Login(props) {
     if (!username || !password) {
       return Alert.alert('Please enter username & password');
     }
+
+    // let newMatrix = new MatrixService();
+    // if (!matrix) {
+    //   newMatrix = new MatrixService();
+    // }
     // loadDispatch({type: 'SET_LOADING', payload: true});
-    const result = await matrix.loginWithPassword(
+    const result = await MatrixService.loginWithPassword(
       username,
       password,
       Config.CHAT_SERVER_URL,
@@ -62,7 +70,7 @@ function Login(props) {
       //   dispatch({type: 'SET_LOADING', payload: result.error});
       console.log('Error logging in: ', result);
 
-      const tryingAgain = await matrix.loginWithPassword(
+      const tryingAgain = await MatrixService.loginWithPassword(
         username,
         password,
         Config.CHAT_SERVER_URL,
@@ -128,4 +136,4 @@ function Login(props) {
   );
 }
 
-export default observer(Login);
+export default Login;

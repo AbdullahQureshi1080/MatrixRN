@@ -29,6 +29,12 @@ import Screen from './Components/Screen/Screen';
 
 LogBox.ignoreAllLogs(true);
 
+import ChatService from './Services/MatrixChatService';
+
+// let matrix = new MatrixService();
+
+// import matrix from './rn-matrix/services/matrix';
+
 const Stack = createNativeStackNavigator();
 
 const AuthStack = ({}) => {
@@ -56,6 +62,7 @@ const AppStack = () => {
 };
 
 const App = props => {
+  // const [matrix, setMatrix] = useState(null);
   const {store, dispatch} = useUserContext();
 
   console.log('THE STORE ', store);
@@ -76,20 +83,23 @@ const App = props => {
 
   useEffect(() => {
     if (userMatrixData) {
+      // setTimeout(() => {
       setLoggedInUser(dispatch, userMatrixData);
-      // matrix.createClient(
-      //   Config.CHAT_SERVER_URL,
-      //   userMatrixData.accessToken,
-      //   userMatrixData.userId,
-      //   userMatrixData.deviceId,
-      // );
+      console.log('THE STORAGE DATA', userMatrixData);
+      ChatService.init(userMatrixData);
+      // }, 2000);
+
       return;
     }
   }, [userMatrixData]);
 
   return (
     <NavigationContainer>
-      {store && store.isAuthenticated ? <AppStack /> : <AuthStack />}
+      {store && store.isAuthenticated && ChatService.ready ? (
+        <AppStack />
+      ) : (
+        <AuthStack />
+      )}
     </NavigationContainer>
   );
 };
@@ -102,4 +112,4 @@ const APPWRAPPER = () => {
   );
 };
 
-export default observer(APPWRAPPER);
+export default APPWRAPPER;

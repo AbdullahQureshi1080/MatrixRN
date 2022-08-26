@@ -1,7 +1,7 @@
 import {StyleSheet, useColorScheme} from 'react-native';
 import {Colors} from 'react-native/Libraries/NewAppScreen';
 
-console.log('THE COLORS', Colors);
+// console.log('THE COLORS', Colors);
 
 const styles = isDarkMode =>
   StyleSheet.create({

@@ -8,23 +8,59 @@ import {
   InfoMessage,
   VideoMessage,
   AudioMessage,
-} from '../components/Chat/models/message';
-import {MessageType} from '../components/Chat/models/message.type';
-import {User, PRESENCE, UserPresense} from '../components/Chat/models/user';
+} from '../Components/Chat/models/message';
+import {MessageType} from '../Components/Chat/models/message.type';
+import {User, PRESENCE, UserPresense} from '../Components/Chat/models/user';
 import './poly.js';
-
-import {UserInfoStorage} from 'src/Factory';
-import {Alert} from 'react-native';
 
 import Config from 'react-native-config';
 import {reject} from 'lodash';
 import {API} from '../Api/ApiConfig';
-import {Actions} from 'react-native-router-flux';
+
+import {MemoryStore, MatrixEvent} from 'matrix-js-sdk';
+
+import AsyncStorage from '@react-native-community/async-storage';
+import AsyncCryptoStore from './storage/AsyncCryptoStore';
+
+import {Alert} from 'react-native';
+import {async} from 'rxjs';
+import {getUserMatrixData} from '../Utils/Storage';
+
+global.Olm = require('@matrix-org/olm/olm_legacy');
+
+if (!Promise.allSettled) {
+  Promise.allSettled = promises =>
+    Promise.all(
+      promises.map((promise, i) =>
+        promise
+          .then(value => ({status: 'fulfilled', value}))
+          .catch(reason => ({status: 'rejected', reason})),
+      ),
+    );
+}
+
+const MATRIX_CLIENT_START_OPTIONS = {
+  initialSyncLimit: 6,
+  lazyLoadMembers: true,
+  pendingEventOrdering: 'detached',
+  timelineSupport: true,
+  unstableClientRelationAggregation: true,
+  // sessionStorage: new sdk.WebStorageSessionStore(AsyncStorage),
+  cryptoStore: new sdk.MemoryCryptoStore(),
+  store: new MemoryStore({
+    localStorage: AsyncStorage,
+  }),
+  // cryptoStore: new AsyncCryptoStore(AsyncStorage),
+  sessionStore: {
+    getLocalTrustedBackupPubKey: () => null,
+  }, // js-sdk complains if this isn't supplied but it's only used for remembering a local trusted backup key
+};
 
 export default class MatrixService {
   /**@type {sdk.MatrixClient}  */
   client = null;
-  host = API.CHAT_URL;
+  // host = Config.CHAT_SERVER_URL;
+  host = 'http://192.168.18.127:8008';
   user = null;
   username = null;
   ready = null;
@@ -40,22 +76,43 @@ export default class MatrixService {
     });
   }
 
-  async createClient(username, password, matrixCredentials) {
+  async createClient(matrixCredentials) {
     const client = sdk.createClient({
       baseUrl: this.host,
-      userId: matrixCredentials.matrixUserId,
+      accessToken: matrixCredentials.accessToken,
+      userId: matrixCredentials.userId,
+      deviceId: matrixCredentials.deviceId,
+      ...MATRIX_CLIENT_START_OPTIONS,
     });
-    this.userId = matrixCredentials.matrixUserId;
-    let user = await client.login('m.login.password', {
-      user: username,
-      password: password,
-      userId: matrixCredentials.matrixUserId,
-    });
-    console.log('User ====', user);
+    this.userId = matrixCredentials.userId;
+    this.accessToken = matrixCredentials.accessToken;
+    // this.user = {
+    //   baseUrl: this.host,
+    //   accessToken: matrixCredentials.accessToken,
+    //   userId: matrixCredentials.userId,
+    //   deviceId: matrixCredentials.deviceId,
+    // };
+    // let user = await client.login('m.login.password', {
+    //   user: username,
+    //   password: password,
+    //   userId: matrixCredentials.matrixUserId,
+    // });
+    console.log('client ====', client);
+
+    let clientSyncPromise = null;
+
+    await client.initCrypto();
+    // .then(async () => {
+    //   client.setGlobalErrorOnUnknownDevices(false);
+    //   await client.startClient({initialSyncLimit: 10});
+    // });
+
+    client.setGlobalErrorOnUnknownDevices(false);
 
     await client.startClient({initialSyncLimit: 10});
 
-    let clientSyncPromise = new Promise((resolve, reject) => {
+    // await client.startClient({initialSyncLimit: 10});
+    clientSyncPromise = new Promise((resolve, reject) => {
       client.once('sync', function (state, prevState, res) {
         console.log('client sync state: ', state, prevState, res);
         if (state === 'PREPARED') {
@@ -68,11 +125,15 @@ export default class MatrixService {
 
     await clientSyncPromise;
 
-    this.user = user;
+    // this.user = user;
+    // this.client = client;
+
+    console.log('THE THIS. CLIENT', this.client);
     return client;
   }
 
   async getClient() {
+    console.log('THE CLIENT IN GET CLIENT', this.client);
     if (!this.client) {
       let client = await this.ready;
       this.client = client;
@@ -92,27 +153,31 @@ export default class MatrixService {
   }
 
   async init(activeCredentials) {
+    // Alert.alert('HI');
     let useCredentials = activeCredentials;
-    let userInfo = await UserInfoStorage.getStoreUserInfo();
-    let {matrixCredentials} = userInfo;
+    let matrixDataFromStorage = await getUserMatrixData();
+
     console.log('=====================');
-    console.log('In init Services', matrixCredentials);
+    console.log('In init Services', matrixDataFromStorage);
     console.log('=====================');
 
-    if (matrixCredentials) {
-      useCredentials = matrixCredentials;
+    if (matrixDataFromStorage) {
+      useCredentials = matrixDataFromStorage;
+    }
+
+    if (!useCredentials) {
+      let client = sdk.createClient(this.host);
+      this.client = client;
+      return Alert.alert('No Data');
     }
 
     try {
-      const client = await this.createClient(
-        useCredentials.matrixUser,
-        useCredentials.matrixPass,
-        useCredentials,
-      );
+      const client = await this.createClient(useCredentials);
       client.publicRooms(function (err, data) {
         // console.log('Public Rooms: %s', JSON.stringify(data));
       });
       this.client = client;
+
       return client;
     } catch (error) {
       return error;
@@ -121,6 +186,16 @@ export default class MatrixService {
   async getAllRooms(roomId) {
     try {
       const client = await this.getClient();
+      console.log('THE CLIETNS', client, roomId);
+      if (!roomId) {
+        const allRooms = client.getRooms();
+        console.log('THE ROOMS IN SERVICE', allRooms);
+        if (allRooms.length) {
+          return allRooms;
+        }
+        return [];
+      }
+
       let rooms = await this.getRooms(roomId);
       console.log('The rooms in get all rooms', rooms);
       return rooms;
@@ -198,18 +273,88 @@ export default class MatrixService {
     return profiles;
   }
 
-  async extractTextMessagesTimeline1(tl) {
-    // console.log('TImeLine', tl);
+  //   async extractTextMessagesTimeline1(tl) {
+  //     // console.log('TImeLine', tl);
+  //     let messages = tl.filter(e => e.type === 'm.room.message');
+  //     // console.log('-----> extractTextMessagesTimeline1', messages);
+  //     let messageTextsP = messages.map(
+  //       async e => await this.extractMessageFromEvent1(e),
+  //     );
+  //     console.log('MESSAGES IN TIMELINE', messages);
+
+  //     let messageTexts = await Promise.all(messageTextsP);
+  //     // console.log('-----> extractTextMessagesTimeline1', messageTextsP);
+  //     return messageTexts;
+  //   }
+
+  async extractTextMessagesTimeline1(tl, allEvents) {
+    const client = await this.getClient();
+    console.log('====================================');
+    console.log('extractTextMessagesTimeline', tl, allEvents);
+    console.log('====================================');
+
     let messages = tl.filter(e => e.type === 'm.room.message');
-    // console.log('-----> extractTextMessagesTimeline1', messages);
+    // let encryptedMessages = tl.filter(e => e.type === 'm.room.encrypted');
+    let encryptedMessages = allEvents;
+
+    let messageTextsE = encryptedMessages.map(async e => {
+      let decryptedEvent = await client.crypto.decryptEvent(e);
+      return {
+        decryptedEvent: await Promise.resolve(decryptedEvent),
+        event: e.event,
+        matrixEvent: e,
+      };
+    });
+
+    console.log(
+      '================= In Room Encrpted Text Start: From TimeLines ==============',
+    );
+    // const eventExtraction = await client.decryptEventIfNeeded(
+    //   encryptedMessages[0],
+    // );
+    console.log(
+      'The Event Extraction: In TimeLines: All Encrypted Messages -> Unencrypted',
+      messageTextsE,
+    );
+    console.log(
+      '================= In Room Encrpted End : From TimeLines ==============',
+    );
+
+    let encryptedMessagesForExtraction = await Promise.all(messageTextsE);
+    console.log(
+      '-----> extractTextMessagesTimeline1:encryptedMessagesForExtraction',
+      encryptedMessagesForExtraction,
+    );
+
+    // ({ body } = event.clearEvent.content);
+    // } catch (error) {
+    //   console.error('#### ', error);
+    // }
+    // return
+    let allDecryptedMessages = encryptedMessagesForExtraction.map(async e =>
+      this.extractMessageFromEncryptedEvent(e.event, e.decryptedEvent),
+    );
+
+    console.log('========================================');
+    console.log('-----> All Descrypted Events', allDecryptedMessages);
+    console.log('========================================');
+
+    let decryptedMessageTexts = await Promise.all(allDecryptedMessages);
+
+    // this.extractMessageFromEncryptedEvent(event.event, eventExtraction)
+    //   .then(message => {
+    //     callback(message);
+    //   })
+    //   .catch(console.log);
+
     let messageTextsP = messages.map(
       async e => await this.extractMessageFromEvent1(e),
     );
-    console.log('MESSAGES IN TIMELINE', messages);
-
     let messageTexts = await Promise.all(messageTextsP);
+
+    let allMessages = messageTexts.concat(decryptedMessageTexts);
     // console.log('-----> extractTextMessagesTimeline1', messageTextsP);
-    return messageTexts;
+    return allMessages;
   }
 
   async getRoomMessagesFromRoomID(roomId, limit = 30) {
@@ -218,6 +363,14 @@ export default class MatrixService {
     let c = await client.roomInitialSync(roomId, 100);
 
     const room = await this.getRoomById(roomId);
+
+    // FOR END TO END START =================
+    console.log('All The Events', room);
+    const filterEncryptedEvents = room.timeline.filter(
+      t => t.event.type === 'm.room.encrypted',
+    );
+
+    // FOR END TO END CLOSE =================
 
     console.log('The ROOM : SDK METHOD', room);
 
@@ -254,7 +407,10 @@ export default class MatrixService {
     // let result = await client.scrollback(a, limit);
     // console.log('--------> newRoomresult', c, c.messages);
     // console.log(timeline);
-    let messages = await this.extractTextMessagesTimeline1(c.messages.chunk, c);
+    let messages = await this.extractTextMessagesTimeline1(
+      c.messages.chunk,
+      filterEncryptedEvents,
+    );
 
     // let updateReadPropertyMessages =
     // console.log('-----> getRoomMessagesFromRoomID', messages);
@@ -275,8 +431,6 @@ export default class MatrixService {
         e.read = true;
       }
     });
-
-
 
     return messages;
   }
@@ -359,6 +513,89 @@ export default class MatrixService {
     return messageType;
   }
 
+  async extractEncryptedMessageContents(content, messageType, completeEvent) {
+    let client = await this.getClient();
+    console.log('The Client', client);
+    if (!client) {
+      return null;
+    }
+    // console.log('The Contents in Matrix Service', completeEvent);
+    /**@type {Message} */
+    let message = null;
+
+    switch (messageType) {
+      case MessageType.TEXT:
+        let tm = new TextMessage();
+        tm.messageType = MessageType.TEXT;
+        message = tm;
+        break;
+      case MessageType.INFO:
+        let im = new InfoMessage();
+        message = im;
+        break;
+
+      case MessageType.IMAGE:
+        let imageMessage = new ImageMessage();
+        imageMessage.filename = content.body;
+        imageMessage.height =
+          content && content.info && content.info.h ? content.info.h : 100;
+        imageMessage.width =
+          content && content.info && content.info.w ? content.info.w : 100;
+        imageMessage.mimetype = content.info.mimetype;
+        imageMessage.size = content.info.size;
+        imageMessage.url = content.url;
+        imageMessage.url = client.mxcUrlToHttp(imageMessage.url);
+
+        message = imageMessage;
+        break;
+
+      case MessageType.AUDIO:
+        let am = new AudioMessage();
+        am.filename = content.body;
+        am.mimetype = content.info.mimetype;
+        am.size = content.info.size;
+        am.url = content.url;
+        am.url = client.mxcUrlToHttp(am.url);
+        message = am;
+        break;
+
+      case MessageType.VIDEO:
+        let vm = new VideoMessage();
+        vm.filename = content.body;
+        vm.mimetype = content.info.mimetype;
+        vm.size = content.info.size;
+        vm.url = content.url;
+        vm.url = client.mxcUrlToHttp(vm.url);
+        vm.duration = content.info.duration;
+        vm.height = content.info.h;
+        vm.width = content.info.w;
+        vm.thumbnailHeight = content.info.thumbnail_info.h;
+        vm.thumbnailWidth = content.info.thumbnail_info.w;
+        vm.thumbnailMimetype = content.info.thumbnail_info.mimetype;
+        vm.thumbnailSize = content.info.thumbnail_info.size;
+        vm.thumbnailUrl = content.info.thumbnail_url;
+        vm.thumbnailUrl = client.mxcUrlToHttp(vm.thumbnailUrl);
+
+        message = vm;
+        break;
+
+      case MessageType.FILE:
+        let fm = new FileMessage();
+        fm.filename = content.filename;
+        fm.mimetype = content.info.mimetype;
+        fm.size = content.info.size;
+        fm.url = content.url;
+        fm.thumbnailUrl = client.mxcUrlToHttp(fm.thumbnailUrl);
+        message = fm;
+        break;
+
+      default:
+        message = new Message();
+    }
+
+    return message;
+  }
+
   async extractMessageContents(content, messageType) {
     let client = await this.getClient();
     // console.log('The Contents in Matrix Service', content);
@@ -437,6 +674,42 @@ export default class MatrixService {
     return message;
   }
 
+  async extractMessageFromEncryptedEvent(event, decryptedEvent) {
+    console.log('The event in extract from Encrpted ', event);
+    console.log('==========================');
+    console.log('The decrypted event ', decryptedEvent);
+
+    const client = await this.getClient();
+
+    if (event.type !== 'm.room.encrypted') {
+      // Alert.alert('Come here');
+      return null;
+    }
+    this.autoVerify(event.room_id);
+    let content = decryptedEvent?.clearEvent?.content;
+    console.log('The Content Object', content);
+    let messageType = this.toMessageType(content.msgtype);
+    console.log('The Message Type', messageType);
+    let userId = event.sender;
+    let user = await this.getUserProfile(userId);
+
+    let message = await this.extractEncryptedMessageContents(
+      content,
+      messageType,
+      event,
+    );
+    message.message = content.body;
+    message.content = content;
+    message.datetime = event.origin_server_ts;
+    message.room = event.room_id;
+    message.id = event.event_id;
+    message.from = user;
+
+    console.log('-----> extractMessageFromEvent1', message);
+
+    return message;
+  }
+
   async extractMessageFromEvent1(e) {
     if (e.type !== 'm.room.message') {
       return null;
@@ -489,12 +762,14 @@ export default class MatrixService {
     }
     const client = await this.getClient();
 
+    client.on('toDeviceEvent', async function (event, room) {
+      Alert.alert('Comes Here');
+      console.log('THE EVENT: VERIFICATIOn', event);
+    });
+
     client.on('Room.receipt', async function (event, room) {
       console.log('THE ROOM ID', room.roomId);
       console.log('EVENT THAT HAS BEEN READ', event, room);
-      if (Actions.currentScene !== 'Chat') {
-        return;
-      }
       if (room.roomId === roomId) {
         // console.log('EVENT THAT HAS BEEN READ', event, room);
         // event
@@ -543,6 +818,35 @@ export default class MatrixService {
     });
 
     client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
+      console.log('Event', event);
+      // Alert.alert('Hi');
+
+      if (event.event.type === 'm.room.encrypted') {
+        // const event = client.crypto.decryptEvent(event);
+        this.autoVerify(event.event.room_id);
+        // try {
+        // let alteredEvent = event;
+        // alteredEvent.
+        console.log(
+          '================= In Room Encrpted Text Start ==============',
+        );
+        const eventExtraction = await client.crypto.decryptEvent(event);
+        console.log('The Event Extraction', eventExtraction);
+        console.log('================= In Room Encrpted End ==============');
+        // ({ body } = event.clearEvent.content);
+        // } catch (error) {
+        //   console.error('#### ', error);
+        // }
+        return this.extractMessageFromEncryptedEvent(
+          event.event,
+          eventExtraction,
+        )
+          .then(message => {
+            callback(message);
+          })
+          .catch(console.log);
+      }
+
       if (event.getType() !== 'm.room.message') {
         return;
       }
@@ -693,4 +997,110 @@ export default class MatrixService {
     let lastMessageString = lastMessage.message;
     return lastMessageString;
   }
+
+  async autoVerify(room_id) {
+    // Alert.alert('Called Auto Verify');
+    let client = await this.getClient();
+    let room = client.getRoom(room_id);
+    const e2eMembers = await room.getEncryptionTargetMembers();
+    for (const member of e2eMembers) {
+      const devices = client.getStoredDevicesForUser(member.userId);
+      for (const device of devices) {
+        if (device.isUnverified()) {
+          await this.verifyDevice(member.userId, device.deviceId);
+        }
+      }
+    }
+  }
+
+  async verifyDevice(userId, deviceId) {
+    let client = await this.getClient();
+    if (!userId || typeof userId !== 'string') {
+      throw new Error('"userId" is required and must be a string.');
+    }
+    if (!deviceId || typeof deviceId !== 'string') {
+      throw new Error('"deviceId" is required and must be a string.');
+    }
+    // Alert.alert('Verifiying Device');
+    await client.setDeviceKnown(userId, deviceId, true);
+    await client.setDeviceVerified(userId, deviceId, true);
+    // await client.ver
+  }
+
+  async loginWithPassword(username, password, homeserver, initCrypto = true) {
+    try {
+      let user = username;
+      console.log('Logging in as %s on %s', user, this.host);
+      let client = await sdk.createClient(this.host);
+      console.log('Logging in to created client...', client);
+      // let user = await client.login('m.login.password', {
+      //   user: username,
+      //   password: password,
+      //   userId: matrixCredentials.matrixUserId,
+      // });
+      const response = await client.login('m.login.password', {
+        user: username,
+        password: password,
+        // refresh_token: true,
+      });
+      console.log(
+        'Logging in again with device ID... ',
+        JSON.stringify(response),
+      );
+      client = await sdk.createClient(
+        this.host,
+        response.access_token,
+        response.user_id,
+        response.device_id,
+      );
+
+      this.client = client;
+      this.user = response;
+      this.userId = response.user_id;
+
+      const data = {
+        userId: response.user_id,
+        accessToken: response.access_token,
+        homeserver: this.host,
+        deviceId: response.device_id,
+        crypto: true,
+        ...response,
+      };
+
+      this.init(data);
+
+      // await this._setData(data);
+
+      return data;
+    } catch (e) {
+      console.log('Error logging in:', e);
+      const data = {};
+      if (e.errcode) {
+        // Matrix errors
+        data.error = e.errcode;
+        switch (e.errcode) {
+          case 'M_FORBIDDEN':
+            data.message = 'auth:login.forbiddenError';
+            break;
+          case 'M_USER_DEACTIVATED':
+            data.message = 'auth:login.userDeactivatedError';
+            break;
+          case 'M_LIMIT_EXCEEDED':
+            data.message = 'auth:login.limitExceededError';
+            break;
+          default:
+            data.message = 'auth:login.unknownError';
+        }
+      } else {
+        // Connection error
+        // TODO: test internet connection
+        data.error = 'NO_RESPONSE';
+        data.message = 'auth:login.noResponseError';
+      }
+      return data;
+    }
+  }
 }
+
+const ChatService = new MatrixService();
+module.exports = ChatService;

@@ -20,48 +20,14 @@ import {Message} from './models/message';
 import {MessageType} from './models/message.type';
 import {Image} from 'react-native';
 // import '../../Services/poly';
-import Entypo from 'react-native-vector-icons/Entypo';
-import SimpleLineIcons from 'react-native-vector-icons/SimpleLineIcons';
-import Toast from 'react-native-simple-toast';
-// Component Imports
-import {
-  ChatHeader,
-  AppScreen,
-  CustomModal,
-  ImageInput,
-  CameraModal,
-  SmallText,
-  AppLoading,
-  GalleryModal,
-  // ChatComponent,
-} from 'components';
-
-import moment from 'moment';
-
-// import placeholderImage from 'assets/placeholders/profile-image.png';
-
-// Styles Imports
-import {color, font, heightScale, widthScale} from 'globalStyle';
-import {SecondaryText} from '../AppText/SecondaryText';
-import {message} from 'statuses';
 
 import styles from './ChatComponentStyles';
 
-import {IOS} from 'enums/Platform.js';
-
-import LockIcon from 'assets/chat/lock.png';
-import {Divider} from 'react-native-paper';
-import {formatDateAndTime} from '../../Utilities/Helpers';
-
 const ChatComponent = props => {
-  const reasonForVisit =
-    props && props.matrixCredentials ? props.matrixCredentials.reason : '';
-
   // Data States
   const [messageText, setMessageText] = useState('');
   const [galleryImages, setGalleryImages] = useState([]);
   const [galleryClose, setGalleryClose] = useState(false);
-  const [disclaimer, setDisclaimer] = useState('');
 
   const [currentImage, setCurrentImage] = useState(null);
 
@@ -82,19 +48,6 @@ const ChatComponent = props => {
       setHeightControl(true);
     }
   }, [viewHeight]);
-
-  // Image
-  const imageSend = require('../../assets/chat/send.png');
-  const [imageUpload, setImageUpload] = useState('');
-  const [imageData, setImageData] = useState(null);
-
-  // Modal States
-  const [isVisible, setIsVisible] = useState(false);
-  const [isCameraVisible, setIsCameraVisible] = useState(false);
-
-  // Loading
-  const [loading, setLoading] = useState(false);
-  const image = require('../../assets/chat/end-visit-modal.png');
 
   /**@type {User} */
   let currentUser = props.currentUser;
@@ -206,25 +159,20 @@ const ChatComponent = props => {
   };
 
   useEffect(() => {
-    setLoading(true);
     console.log('The Messages', messages);
     setMessageList(messages);
-    // setLoading(false);
   }, [messages]);
   useEffect(() => {
-    setLoading(false);
-    if (messageList && messageList.length > 0) {
-      const imageMessages = messageList.filter(
-        message => message.messageType === 'IMAGE',
-      );
-      // console.log('The Image Messages', imageMessages);
-      const chatImages = imageMessages.map(({url}) => url);
-      // console.log('The Chat Images', chatImages);
-      setGalleryImages(chatImages);
-      setLoading(false);
-      // setLoading(true);
-      return;
-    }
+    // if (messageList && messageList.length > 0) {
+    //   const imageMessages = messageList.filter(
+    //     message => message.messageType === 'IMAGE',
+    //   );
+    //   // console.log('The Image Messages', imageMessages);
+    //   const chatImages = imageMessages.map(({url}) => url);
+    //   // console.log('The Chat Images', chatImages);
+    //   setGalleryImages(chatImages);
+    //   return;
+    // }
   }, [messageList]);
 
   useEffect(() => {
@@ -243,12 +191,10 @@ const ChatComponent = props => {
   }, [users]);
 
   useEffect(() => {
-    // setLoading(true);
     if (!currentUser) {
       return;
     }
     if (!messages && messages.length === 0) {
-      setLoading(false);
       return;
     }
 
@@ -261,21 +207,24 @@ const ChatComponent = props => {
   }, [messageList]);
 
   const handleTextSend = () => {
-    if (text == '' && imageUpload == '') {
-      if (Platform.OS === 'android') {
-        return ToastAndroid.show(
-          'Cannot send empty message !',
-          ToastAndroid.SHORT,
-        );
-        // return Alert.alert('Cannot send empty message !');
-      } else {
-        return Alert.alert('Cannot send empty message !');
-      }
+    // if (text == '' && imageUpload == '') {
+    //   if (Platform.OS === 'android') {
+    //     return ToastAndroid.show(
+    //       'Cannot send empty message !',
+    //       ToastAndroid.SHORT,
+    //     );
+    //     // return Alert.alert('Cannot send empty message !');
+    //   } else {
+    //     return Alert.alert('Cannot send empty message !');
+    //   }
+    // }
+    if (!text) {
+      return Alert.alert('Cannot send empty message !');
     }
-    if (imageUpload) {
-      handleImageMessage();
-      return;
-    }
+    // if (imageUpload) {
+    //   handleImageMessage();
+    //   return;
+    // }
     let now = new Date();
     let message = new Message();
     message.message = text;
@@ -354,14 +303,14 @@ const ChatComponent = props => {
     return (
       <View key={msg.id} style={styles.senderMain}>
         <View style={styles.sender}>
-          <SmallText style={styles.senderText}>{msg.message}</SmallText>
+          <Text style={styles.senderText}>{msg.message}</Text>
         </View>
-        <SmallText style={styles.messageSenderTime}>
+        <Text style={styles.messageSenderTime}>
           {timeAmPm}{' '}
-          <SecondaryText style={styles.messageSenderTime}>
+          <Text style={styles.messageSenderTime}>
             {msg.read ? 'Read' : 'Unread'}
-          </SecondaryText>
-        </SmallText>
+          </Text>
+        </Text>
       </View>
     );
   };
@@ -376,9 +325,9 @@ const ChatComponent = props => {
     return (
       <View key={msg.id} style={styles.recieverMain}>
         <View style={styles.reciever}>
-          <SmallText style={styles.recieverText}>{msg.message}</SmallText>
+          <Text style={styles.recieverText}>{msg.message}</Text>
         </View>
-        <SmallText style={styles.messageRecieverTime}>{timeAmPm}</SmallText>
+        <Text style={styles.messageRecieverTime}>{timeAmPm}</Text>
       </View>
     );
   };
@@ -400,9 +349,9 @@ const ChatComponent = props => {
             <Image source={{uri: msg.url}} style={styles.messageImage} />
           </View>
 
-          <SmallText style={styles.recieverText}>{msg.message}</SmallText>
+          <Text style={styles.recieverText}>{msg.message}</Text>
         </View>
-        <SmallText style={styles.messageRecieverTime}>{timeAmPm}</SmallText>
+        <Text style={styles.messageRecieverTime}>{timeAmPm}</Text>
       </TouchableOpacity>
     );
   };
@@ -448,9 +397,9 @@ const ChatComponent = props => {
             />
           </View>
 
-          <SmallText style={styles.senderText}>{msg.message}</SmallText>
+          <Text style={styles.senderText}>{msg.message}</Text>
         </View>
-        <SmallText style={styles.messageSenderTime}>{timeAmPm}</SmallText>
+        <Text style={styles.messageSenderTime}>{timeAmPm}</Text>
       </TouchableOpacity>
     );
   };
@@ -459,7 +408,7 @@ const ChatComponent = props => {
     return (
       <View key={msg.id} style={styles.senderMain}>
         <View style={styles.sender}>
-          <SmallText style={styles.senderText}>{msg.message}</SmallText>
+          <Text style={styles.senderText}>{msg.message}</Text>
         </View>
       </View>
     );
@@ -506,232 +455,54 @@ const ChatComponent = props => {
   //     return <div className={classNames}></div>;
   //   };
 
-  // useEffect(() => {
-  //   console.log("The Image Uplaod", props.image)
-  // }, []);
-  useEffect(() => {
-    if (disclaimer && disclaimer !== '') {
-      return setTimeout(() => {
-        setDisclaimer('');
-      }, 10000);
-    }
-  }, [disclaimer]);
-
-  useEffect(() => {
-    if (props.chatClosed) {
-      setDisclaimer('This visit has ended. You can no longer send messages');
-    }
-  }, []);
-
   return (
-    // <>
-    //   {loading && messageList.length === 0 ? (
-    //     <AppLoading message={'Almost done !'} />
-    //   ) : messageList.length === 0 ? (
-    //     <>
-    //       {render && messageList.length === 0 ? (
-    //         <View
-    //           style={[
-    //             styles.screen,
-    //             { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    //           ]}
-    //         >
-    //           <SmallText style={{ color: color.icon }}>No Messages !</SmallText>
-    //         </View>
-    //       ) : render ? null : (
-    //         <AppLoading message={'Please wait we are initializing your chat'} />
-    //       )}
-    //     </>
-    // <>
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{flex: 1}}
       keyboardVerticalOffset={20}>
-      {loading && messageList.length === 0 ? (
-        <AppLoading message={'Almost done !'} />
-      ) : messageList.length === 0 ? (
-        <>
-          {render && messageList.length === 0 ? (
-            <View style={[styles.screen, {flex: 1}]}>
-              <View style={styles.encryptionBox}>
-                <Image source={LockIcon} style={styles.lockIcon} />
-                <SecondaryText style={styles.encryptionText}>
-                  Messages are end-to-end encrypted
-                </SecondaryText>
-              </View>
-              <View style={styles.DateBox}>
-                <Divider style={styles.dividerDate} />
-                <SecondaryText style={styles.dateText}>
-                  Start Date:{' '}
-                  {formatDateAndTime(
-                    props?.matrixCredentials?.visit?.startedAt,
-                  )}
-                  {/* {moment(props?.matrixCredentials?.visit?.startedAt).format(
-                    'MM-DD-YYYY',
-                  )} */}
-                </SecondaryText>
-                <Divider style={styles.dividerDate} />
-              </View>
-              <View style={styles.reasonView}>
-                <View style={styles.reasonContentView}>
-                  <SmallText
-                    style={[
-                      styles.reasonForVisitText,
-                      {fontFamily: font.one.medium},
-                    ]}>
-                    Reason for Visit:
-                  </SmallText>
-                  <SmallText style={styles.reasonForVisitText}>
-                    {reasonForVisit}
-                  </SmallText>
-                </View>
-              </View>
-              {props.matrixCredentials?.visit?.status == 'Inprogress' ? null : (
-                <View style={styles.DateBox}>
-                  <Divider style={styles.dividerDate} />
-                  <SecondaryText style={styles.dateText}>
-                    End Date:{' '}
-                    {formatDateAndTime(
-                      props?.matrixCredentials?.visit?.endedAt,
-                    )}
-                  </SecondaryText>
-                  <Divider style={styles.dividerDate} />
-                </View>
-              )}
-              <View style={styles.emptyChatView}>
-                <SmallText style={{color: color.textLight}}>
-                  {/* No Messages ! */}
-                </SmallText>
-              </View>
-            </View>
-          ) : render ? null : (
-            <AppLoading message={'Please wait we are initializing your chat'} />
-          )}
-        </>
-      ) : (
-        <ScrollView
-          style={styles.screen}
-          contentContainerStyle={[styles.containerStyle, {flexGrow: 1}]}
-          ref={messagesEndRef}
-          onContentSizeChange={(contentWidth, contentHeight) => {
-            scrollToMessageEnd();
-          }}>
-          <View style={styles.encryptionBox}>
-            <Image source={LockIcon} style={styles.lockIcon} />
-            <SecondaryText style={styles.encryptionText}>
-              Messages are end-to-end encrypted
-            </SecondaryText>
-          </View>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[styles.containerStyle, {flexGrow: 1}]}
+        ref={messagesEndRef}
+        onContentSizeChange={(contentWidth, contentHeight) => {
+          scrollToMessageEnd();
+        }}>
+        <View style={styles.encryptionBox}>
+          <Text style={styles.encryptionText}>
+            Messages are end-to-end encrypted
+          </Text>
+        </View>
 
-          {/* <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
-          > */}
-          <View style={styles.DateBox}>
-            <Divider style={styles.dividerDate} />
-            <SecondaryText style={styles.dateText}>
-              Start Date:{' '}
-              {formatDateAndTime(props?.matrixCredentials?.visit?.startedAt)}
-            </SecondaryText>
-            <Divider style={styles.dividerDate} />
-          </View>
-          <View style={styles.reasonView}>
-            <View style={styles.reasonContentView}>
-              <SmallText
-                style={[
-                  styles.reasonForVisitText,
-                  {fontFamily: font.one.bold},
-                ]}>
-                Reason for Visit:
-              </SmallText>
-              <SmallText style={styles.reasonForVisitText}>
-                {reasonForVisit}
-              </SmallText>
-            </View>
-          </View>
-          {render &&
-            messageList.map((message, i) => (
-              <View key={i}>{formatMessage(message)}</View>
-            ))}
-          {/* </KeyboardAvoidingView> */}
-          {props.matrixCredentials?.visit?.status == 'Inprogress' ? null : (
-            <View style={styles.DateBox}>
-              <Divider style={styles.dividerDate} />
-              <SecondaryText style={styles.dateText}>
-                End Date:{' '}
-                {formatDateAndTime(props?.matrixCredentials?.visit?.endedAt)}
-              </SecondaryText>
-              <Divider style={styles.dividerDate} />
-            </View>
-          )}
-        </ScrollView>
-      )}
-
+        {render &&
+          messageList.map((message, i) => (
+            <View key={i}>{formatMessage(message)}</View>
+          ))}
+      </ScrollView>
       <TouchableWithoutFeedback
         onPress={Keyboard.dismiss}
         // style={{ marginBottom: 100 }}
       >
         <View style={styles.inputMainView}>
-          {imageUpload ? (
-            <View
-              style={[
-                styles.ImagePreviewContainer,
-                {marginBottom: heightInput - 20, left: widthScale(25)},
-              ]}>
-              <View style={styles.preview}>
-                <TouchableOpacity
-                  onPress={() => setImageUpload('')}
-                  style={styles.cancelImageIcon}>
-                  <Entypo
-                    color={color.basic}
-                    name="cross"
-                    size={heightScale(22)}
-                  />
-                </TouchableOpacity>
-                <Image
-                  source={{uri: imageUpload}}
-                  style={styles.imagePreview}
-                />
-              </View>
-            </View>
-          ) : null}
-          {disclaimer ? (
-            <SecondaryText
-              style={{
-                height: 70,
-                paddingHorizontal: widthScale(30),
-                backgroundColor: color.white,
-              }}>
-              {disclaimer}
-            </SecondaryText>
-          ) : null}
           <View
             style={{
               flexDirection: 'row',
               justifyContent: 'space-between',
               // backgroundColor: 'yellow',
               alignItems: 'center',
-              paddingTop: heightScale(10),
-              marginBottom: heightScale(15),
+              paddingTop: 10,
+              marginBottom: 15,
             }}>
             <TouchableOpacity
               onPress={() => setIsCameraVisible(true)}
               style={styles.camerIconCaontainer}
               disabled={props.chatClosed}>
-              <SimpleLineIcons
-                name="plus"
-                size={heightScale(20)}
-                color={color.icon}
-              />
+              {/* <SimpleLineIcons name="plus" size={20} /> */}
             </TouchableOpacity>
             <View
               style={[
                 styles.inputTextContainer,
                 {
-                  borderRadius: heightScale(8),
-                  // backgroundColor: 'red',
-                  // height: heightScale(viewHeight),
-                  // height
+                  borderRadius: 8,
                 },
               ]}>
               <View
@@ -739,94 +510,45 @@ const ChatComponent = props => {
                   styles.textInputContainer,
                   {
                     height: viewHeight,
-                    minHeight: Platform.OS === IOS && 5 ? 1.25 * 40 : null,
+                    minHeight: Platform.OS === 'ios' && 5 ? 1.25 * 40 : null,
                   },
                 ]}>
-                {props.chatClosed ? (
-                  <TouchableOpacity
-                    style={{width: '90%'}}
-                    onPress={() => {
-                      // Alert.alert('Disclamier');
-                      setDisclaimer(
-                        'This visit has ended. You can no longer send messages',
+                <TextInput
+                  placeholder="Type a message"
+                  style={[styles.textInput, {height: heightInput}]}
+                  value={text}
+                  // numberOfLines={5}
+                  numberOfLines={Platform.OS === 'ios' ? null : 5}
+                  minHeight={Platform.OS === 'ios' && 5 ? 7 * 5 : null}
+                  multiline={true}
+                  onChangeText={text => handleTextChange(text)}
+                  onContentSizeChange={event => {
+                    if (!heightControl) {
+                      setHeightInput(event.nativeEvent.contentSize.height);
+                      setViewHeight(event.nativeEvent.contentSize.height);
+                      return;
+                    }
+                    if (text == '') {
+                      console.log(
+                        'The Height',
+                        event.nativeEvent.contentSize.height,
                       );
-                    }}>
-                    <TextInput
-                      placeholder="Type a message"
-                      style={[styles.textInput, {height: heightInput}]}
-                      placeholderTextColor={color.icon}
-                      value={text}
-                      multiline={true}
-                      onChangeText={text => handleTextChange(text)}
-                      onContentSizeChange={event => {
-                        setHeightInput(event.nativeEvent.contentSize.height);
-                        setViewHeight(event.nativeEvent.contentSize.height);
-                      }}
-                      editable={!props.chatClosed}
-                    />
-                  </TouchableOpacity>
-                ) : (
-                  <TextInput
-                    placeholder="Type a message"
-                    style={[styles.textInput, {height: heightInput}]}
-                    placeholderTextColor={color.icon}
-                    value={text}
-                    // numberOfLines={5}
-                    numberOfLines={Platform.OS === IOS ? null : 5}
-                    minHeight={Platform.OS === IOS && 5 ? 7 * 5 : null}
-                    multiline={true}
-                    onChangeText={text => handleTextChange(text)}
-                    onContentSizeChange={event => {
-                      if (!heightControl) {
-                        setHeightInput(event.nativeEvent.contentSize.height);
-                        setViewHeight(event.nativeEvent.contentSize.height);
-                        return;
-                      }
-                      if (text == '') {
-                        console.log(
-                          'The Height',
-                          event.nativeEvent.contentSize.height,
-                        );
-                        // setHeightInput(event.nativeEvent.contentSize.height);
-                        setHeightControl(false);
-                        setViewHeight(48);
-                        setHeightInput(48);
-                      }
-                    }}
-                    editable={!props.chatClosed}
-                  />
-                )}
+                      // setHeightInput(event.nativeEvent.contentSize.height);
+                      setHeightControl(false);
+                      setViewHeight(48);
+                      setHeightInput(48);
+                    }
+                  }}
+                />
               </View>
             </View>
             <TouchableOpacity
               style={styles.button}
               onPress={() => handleTextSend()}
-              disabled={props.chatClosed}>
-              <Image source={imageSend} style={styles.buttonIcon} />
-            </TouchableOpacity>
+              disabled={props.chatClosed}></TouchableOpacity>
           </View>
         </View>
       </TouchableWithoutFeedback>
-      {props.chatClosed ? null : (
-        <CameraModal
-          title={'Choose or upload'}
-          subtitle={'Take a picture or upload image from gallery.'}
-          isVisible={isCameraVisible}
-          setIsVisible={visible => setIsCameraVisible(visible)}
-          imageUri={imageUpload}
-          onChangeImage={(image, data) => {
-            setImageUpload(image);
-            setImageData(data);
-            setIsCameraVisible(false);
-          }}
-        />
-      )}
-      <GalleryModal
-        isVisible={galleryClose}
-        images={galleryImages}
-        onPressClose={() => setGalleryClose(false)}
-        currentImage={currentImage}
-      />
     </KeyboardAvoidingView>
   );
 };
