@@ -6,6 +6,7 @@ import {
   View,
   StatusBar,
   TextInput,
+  Alert,
 } from 'react-native';
 import React, {useEffect, useState, useRef} from 'react';
 
@@ -17,7 +18,23 @@ import MatrixService from '../../Services/MatrixChatService';
 
 import ChatComponent from '../../Components/Chat/ChatComponent';
 
+import '../../Services/poly';
+
+if (!Promise.allSettled) {
+  Promise.allSettled = promises =>
+    Promise.all(
+      promises.map((promise, i) =>
+        promise
+          .then(value => ({status: 'fulfilled', value}))
+          .catch(reason => ({status: 'rejected', reason})),
+      ),
+    );
+}
+
+const ChatService = MatrixService;
+
 export default function Room({route, navigation}) {
+  console.log('THE MATRIX SERVICE IN ROOM', ChatService);
   const {room} = route.params;
   // console.log('THE ROOM IN ROOM ', room);
   const roomId = room.roomId;
@@ -55,6 +72,8 @@ export default function Room({route, navigation}) {
   }, []);
 
   useEffect(() => {
+    console.log('THE READy', ready);
+
     if (!ready) {
       return;
     }
@@ -65,17 +84,17 @@ export default function Room({route, navigation}) {
       })
       .catch(console.log);
 
-    MatrixService.getCurrentUser()
+    ChatService.getCurrentUser()
       .then(user => {
         setCurrentUser(user);
       })
       .catch(console.log);
 
-    MatrixService.getRoomMembers(roomId)
+    ChatService.getRoomMembers(roomId)
       .then(members => {
         setUsers(members);
         for (let m of members) {
-          MatrixService.onPresense(m.id, res => {
+          ChatService.onPresense(m.id, res => {
             let userId = res.userId;
             let presences = [...usersPresenceRef.current];
             presences = presences.filter(u => u.userId !== userId);
@@ -92,9 +111,10 @@ export default function Room({route, navigation}) {
   }, [ready]);
 
   const getMessages = async () => {
-    let messages = await MatrixService.getRoomMessagesFromRoomID(roomId);
+    let messages = await ChatService.getRoomMessagesFromRoomID(roomId);
 
-    MatrixService.onMessageReceive(roomId, (msg, event, userId) => {
+    ChatService.onMessageReceive(roomId, (msg, event, userId) => {
+      console.log('THE NEW MESSAGE', msg);
       let list = [...messageRef.current];
 
       if (msg) {
@@ -123,7 +143,7 @@ export default function Room({route, navigation}) {
   };
 
   const uploadImage = async image => {
-    let uploadResponse = await MatrixService.uploadContent(image, {
+    let uploadResponse = await ChatService.uploadContent(image, {
       rawResponse: false,
       type: image.type,
       onlyContentUri: false,
@@ -145,15 +165,15 @@ export default function Room({route, navigation}) {
         currentUser={currentUser}
         users={users}
         onMicrophoneClick={() =>
-          MatrixService.getRoomMembers(roomId)
+          ChatService.getRoomMembers(roomId)
             .then(console.log)
             .catch(console.log)
         }
         onMessageSend={msg => {
-          MatrixService.sendTextMessageToRoom(roomId, msg.message);
+          ChatService.sendTextMessageToRoom(roomId, msg.message);
         }}
         onImageMessageSend={msg => {
-          MatrixService.sendImageMessageToRoom(roomId, msg);
+          ChatService.sendImageMessageToRoom(roomId, msg);
         }}
         uploadImage={uploadImage}
       />

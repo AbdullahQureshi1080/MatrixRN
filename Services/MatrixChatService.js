@@ -25,35 +25,41 @@ import AsyncCryptoStore from './storage/AsyncCryptoStore';
 import {Alert} from 'react-native';
 import {async} from 'rxjs';
 import {getUserMatrixData} from '../Utils/Storage';
+import {OlmDevice} from 'matrix-js-sdk/lib/crypto/OlmDevice';
+
+// import localStorage
 
 global.Olm = require('@matrix-org/olm/olm_legacy');
 
-if (!Promise.allSettled) {
-  Promise.allSettled = promises =>
-    Promise.all(
-      promises.map((promise, i) =>
-        promise
-          .then(value => ({status: 'fulfilled', value}))
-          .catch(reason => ({status: 'rejected', reason})),
-      ),
-    );
-}
+// if (!Promise.allSettled) {
+//   Promise.allSettled = promises =>
+//     Promise.all(
+//       promises.map((promise, i) =>
+//         promise
+//           .then(value => ({status: 'fulfilled', value}))
+//           .catch(reason => ({status: 'rejected', reason})),
+//       ),
+//     );
+// }
+
+// sdk.
 
 const MATRIX_CLIENT_START_OPTIONS = {
-  initialSyncLimit: 6,
+  initialSyncLimit: 10,
   lazyLoadMembers: true,
   pendingEventOrdering: 'detached',
   timelineSupport: true,
   unstableClientRelationAggregation: true,
-  // sessionStorage: new sdk.WebStorageSessionStore(AsyncStorage),
+  sessionStore: new sdk.MemoryStore(AsyncStorage),
+  // sessionStorage: new sdk.WebStorageSessionStore(window.sessionStorage),
   cryptoStore: new sdk.MemoryCryptoStore(),
-  store: new MemoryStore({
-    localStorage: AsyncStorage,
-  }),
+  // store: new MemoryStore({
+  //   localStorage: AsyncStorage,
+  // }),
   // cryptoStore: new AsyncCryptoStore(AsyncStorage),
-  sessionStore: {
-    getLocalTrustedBackupPubKey: () => null,
-  }, // js-sdk complains if this isn't supplied but it's only used for remembering a local trusted backup key
+  // sessionStore: {
+  //   getLocalTrustedBackupPubKey: () => null,
+  // }, // js-sdk complains if this isn't supplied but it's only used for remembering a local trusted backup key
 };
 
 export default class MatrixService {
@@ -66,6 +72,7 @@ export default class MatrixService {
   ready = null;
   accessToken = null;
   userId = null;
+  deviceId = null;
 
   constructor(matrixCredentials) {
     this.client = null;
@@ -84,8 +91,18 @@ export default class MatrixService {
       deviceId: matrixCredentials.deviceId,
       ...MATRIX_CLIENT_START_OPTIONS,
     });
+    this.deviceId = matrixCredentials.deviceId;
     this.userId = matrixCredentials.userId;
     this.accessToken = matrixCredentials.accessToken;
+
+    // const user = await client.login('m.login.password', {
+    //   user: 'lucian',
+    //   password: 'Lucian!@#$%',
+    //   userId: matrixCredentials.userId,
+    // });
+
+    // console.log('THE USER BY LOGIN', user);
+
     // this.user = {
     //   baseUrl: this.host,
     //   accessToken: matrixCredentials.accessToken,
@@ -104,12 +121,12 @@ export default class MatrixService {
     await client.initCrypto();
     // .then(async () => {
     //   client.setGlobalErrorOnUnknownDevices(false);
-    //   await client.startClient({initialSyncLimit: 10});
+    await client.startClient({initialSyncLimit: 10});
     // });
 
     client.setGlobalErrorOnUnknownDevices(false);
 
-    await client.startClient({initialSyncLimit: 10});
+    // await client.startClient({initialSyncLimit: 10});
 
     // await client.startClient({initialSyncLimit: 10});
     clientSyncPromise = new Promise((resolve, reject) => {
@@ -124,6 +141,19 @@ export default class MatrixService {
     });
 
     await clientSyncPromise;
+
+    // this.verifyDevice(matrixCredentials.userId, matrixCredentials.deviceId);
+
+    client.on('RoomMember.membership', function (event, member) {
+      if (
+        member.membership === 'invite' &&
+        member.userId === matrixCredentials.userId
+      ) {
+        client.joinRoom(member.roomId).then(function () {
+          console.log('Auto-joined %s', member.roomId);
+        });
+      }
+    });
 
     // this.user = user;
     // this.client = client;
@@ -298,7 +328,9 @@ export default class MatrixService {
     let encryptedMessages = allEvents;
 
     let messageTextsE = encryptedMessages.map(async e => {
+      // client.crypto
       let decryptedEvent = await client.crypto.decryptEvent(e);
+      console.log('THE EVENT:EVENT:EVENT', decryptedEvent);
       return {
         decryptedEvent: await Promise.resolve(decryptedEvent),
         event: e.event,
@@ -320,7 +352,7 @@ export default class MatrixService {
       '================= In Room Encrpted End : From TimeLines ==============',
     );
 
-    let encryptedMessagesForExtraction = await Promise.all(messageTextsE);
+    let encryptedMessagesForExtraction = await Promise.all(allEvents);
     console.log(
       '-----> extractTextMessagesTimeline1:encryptedMessagesForExtraction',
       encryptedMessagesForExtraction,
@@ -757,14 +789,31 @@ export default class MatrixService {
   }
 
   async onMessageReceive(roomId, callback) {
+    // Alert.alert('Listener Actvated');
     if (!callback) {
       throw new Error(`No callback provided`);
     }
     const client = await this.getClient();
 
+    // console.log('CLIENT: onMessageRecieve', client, roomId);
+
     client.on('toDeviceEvent', async function (event, room) {
-      Alert.alert('Comes Here');
-      console.log('THE EVENT: VERIFICATIOn', event);
+      Alert.alert('TO Device Event');
+      console.log('THE EVENT: VERIFICATION', event);
+      if (event.getType() == 'm.key.verification.request') {
+        client.emit('m.key.verification.ready', async function (respone) {
+          console.log("Hi, I'm Ready");
+        });
+      }
+      if (event.getType() == 'm.room_key_request') {
+        Alert.alert('Requesting Room KEY');
+        conosle.log('KEY_REQUEST_EVENT', event);
+        sendToDeviceForwardKeys(event);
+        // client.emit('m.forwarded_room_key', async function (response) {
+        //   sendToDeviceForwardKeys();
+        //   console.log("Hi, I'm Ready: m.key_key_request", response);
+        // });
+      }
     });
 
     client.on('Room.receipt', async function (event, room) {
@@ -818,7 +867,8 @@ export default class MatrixService {
     });
 
     client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
-      console.log('Event', event);
+      // Alert.alert('Listener Actvated');
+      console.log('EVENT', event);
       // Alert.alert('Hi');
 
       if (event.event.type === 'm.room.encrypted') {
@@ -962,6 +1012,26 @@ export default class MatrixService {
     const uploadResponse = await client.uploadContent(file, options);
     console.log('The Uplaod Response in service', uploadResponse);
     return uploadResponse;
+  }
+
+  async sendToDeviceForwardKeys(event) {
+    const client = await this.getClient();
+    if (!this.userId || this.deviceId) {
+      conosle.log(
+        'sendToDeviceForwardKeys: error -> userId || deviceId is undefined',
+      );
+      return;
+    }
+    const res = client.sendToDevice('m.forwarded_room_key', {
+      user: this.userId,
+      deviceId: this.deviceId,
+      content: {
+        ...event.body,
+        forwarding_curve25519_key_chain: event.forwarding_curve25519_key_chain,
+        sender_claimed_ed25519_key: event.senderCurve25519Key,
+      },
+    });
+    console.log('the res by forwarding keys', res);
   }
 
   async onReadLatestEvent(event) {
