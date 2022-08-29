@@ -120,14 +120,14 @@ export default function Room({route, navigation}) {
       if (msg) {
         list = [...messageRef.current, msg];
       }
-      console.log('EVENT > SENDER ID > USER ID', event.sender.userId);
+      console.log('EVENT > SENDER ID > USER ID', event?.sender?.userId);
       console.log('USER ID', userId);
 
-      if (event.sender.userId !== userId) {
+      if (event?.sender?.userId !== userId) {
         // Alert.alert('Hi');
         console.log('READING MESSAGE', event);
         list.filter(m => {
-          if (m.from.id !== event.sender.id) {
+          if (m.from.id !== event?.sender?.id) {
             if (m.from.id == userId) {
               m.read = true;
             }

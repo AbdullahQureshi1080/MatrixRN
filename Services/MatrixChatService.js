@@ -50,9 +50,9 @@ const MATRIX_CLIENT_START_OPTIONS = {
   pendingEventOrdering: 'detached',
   timelineSupport: true,
   unstableClientRelationAggregation: true,
-  sessionStore: new sdk.MemoryStore(AsyncStorage),
+  // sessionStore: new sdk.MemoryStore(AsyncStorage),
   // sessionStorage: new sdk.WebStorageSessionStore(window.sessionStorage),
-  cryptoStore: new sdk.MemoryCryptoStore(),
+  // cryptoStore: new sdk.MemoryCryptoStore(),
   // store: new MemoryStore({
   //   localStorage: AsyncStorage,
   // }),
@@ -66,7 +66,7 @@ export default class MatrixService {
   /**@type {sdk.MatrixClient}  */
   client = null;
   // host = Config.CHAT_SERVER_URL;
-  host = 'http://192.168.18.127:8008';
+  host = 'http://192.168.18.22:8008';
   user = null;
   username = null;
   ready = null;
@@ -163,7 +163,7 @@ export default class MatrixService {
   }
 
   async getClient() {
-    console.log('THE CLIENT IN GET CLIENT', this.client);
+    // console.log('THE CLIENT IN GET CLIENT', this.client);
     if (!this.client) {
       let client = await this.ready;
       this.client = client;
@@ -331,6 +331,9 @@ export default class MatrixService {
       // client.crypto
       let decryptedEvent = await client.crypto.decryptEvent(e);
       console.log('THE EVENT:EVENT:EVENT', decryptedEvent);
+      if (!decryptedEvent) {
+        Alert.alert('Errorr');
+      }
       return {
         decryptedEvent: await Promise.resolve(decryptedEvent),
         event: e.event,
@@ -397,14 +400,14 @@ export default class MatrixService {
     const room = await this.getRoomById(roomId);
 
     // FOR END TO END START =================
-    console.log('All The Events', room);
-    const filterEncryptedEvents = room.timeline.filter(
-      t => t.event.type === 'm.room.encrypted',
-    );
+    // console.log('All The Events', room);
+    // const filterEncryptedEvents = room.timeline.filter(
+    //   t => t.event.type === 'm.room.encrypted',
+    // );
 
     // FOR END TO END CLOSE =================
 
-    console.log('The ROOM : SDK METHOD', room);
+    // console.log('The ROOM : SDK METHOD', room);
 
     const accountData = room.accountData;
 
@@ -413,7 +416,13 @@ export default class MatrixService {
 
     let timeline = room.getLiveTimeline();
 
+    console.log('THE LIVE TIMELINE', client.room);
+
+    // /
+
     let eventsFromTimeline = timeline.getEvents();
+
+    // console.log('THE EVENTS FROM TIMELINE', eventsFromTimeline);
 
     let messageEvents = eventsFromTimeline.filter(
       e => e.getType() === 'm.room.message',
@@ -438,24 +447,30 @@ export default class MatrixService {
 
     // let result = await client.scrollback(a, limit);
     // console.log('--------> newRoomresult', c, c.messages);
+
     // console.log(timeline);
-    let messages = await this.extractTextMessagesTimeline1(
-      c.messages.chunk,
-      filterEncryptedEvents,
-    );
+
+    // const roomEvents = room.getT
+
+    let messages = await this.extractEventsInitialFromSync(c.messages.chunk);
+    // let messages = await this.extractTextMessagesTimeline1(
+    //   c.messages.chunk,
+    //   filterEncryptedEvents,
+    // );
 
     // let updateReadPropertyMessages =
     // console.log('-----> getRoomMessagesFromRoomID', messages);
     let stoppingIndex = 0;
     let messageEventsFromUser = messages.filter((e, index) => {
-      if (e.id == fullyReadEventId) {
+      // console.log('THE E ID ISSUE', e);
+      if (e?.id == fullyReadEventId) {
         console.log('Index to Stop:', index);
         stoppingIndex = index;
         // e.read = true;
         // return e;
       }
 
-      if (e.from.id == this.userId) {
+      if (e?.from?.id == this.userId) {
         if (stoppingIndex > 0) {
           // e.read = true;
           return e;
@@ -717,7 +732,7 @@ export default class MatrixService {
       // Alert.alert('Come here');
       return null;
     }
-    this.autoVerify(event.room_id);
+    // this.autoVerify(event.room_id);
     let content = decryptedEvent?.clearEvent?.content;
     console.log('The Content Object', content);
     let messageType = this.toMessageType(content.msgtype);
@@ -788,33 +803,101 @@ export default class MatrixService {
     return message;
   }
 
+  async forwardDeviceKeys(event) {
+    const client = await this.getClient();
+    if (!this.userId || !this.deviceId) {
+      conosle.log(
+        'sendToDeviceForwardKeys: error -> userId || deviceId is undefined',
+      );
+      return;
+    }
+    const res = await client.sendToDevice('m.forwarded_room_key', {
+      user: this.userId,
+      deviceId: this.deviceId,
+      content: {
+        ...event.body,
+        forwarding_curve25519_key_chain: event.forwarding_curve25519_key_chain,
+        sender_claimed_ed25519_key: event.senderCurve25519Key,
+      },
+    });
+    console.log('the res by forwarding keys', res);
+  }
+
   async onMessageReceive(roomId, callback) {
     // Alert.alert('Listener Actvated');
     if (!callback) {
       throw new Error(`No callback provided`);
     }
     const client = await this.getClient();
-
+    const forwardDeviceKeys = this.forwardDeviceKeys;
+    const userId = this.userId;
+    const deviceId = this.deviceId;
     // console.log('CLIENT: onMessageRecieve', client, roomId);
+
+    // client.on('event', async function (event, room) {
+    //   console.log('ANY EVENT', event);
+    // });
+    // this.fo
 
     client.on('toDeviceEvent', async function (event, room) {
       Alert.alert('TO Device Event');
-      console.log('THE EVENT: VERIFICATION', event);
-      if (event.getType() == 'm.key.verification.request') {
-        client.emit('m.key.verification.ready', async function (respone) {
-          console.log("Hi, I'm Ready");
-        });
+
+      if (event.getType() === 'm.key.verification.request') {
+        console.log('THE EVENT: VERIFICATION', event);
+        // const responseVerificationReady = client.sendToDevice(
+        //   'm.key.verification.ready',
+        //   {
+        //     // from_device:
+        //     // user: userId,
+        //     // deviceId: deviceId,
+        //     // content: {
+        //     //   ...event.body,
+        //     //   forwarding_curve25519_key_chain:
+        //     //     event.forwarding_curve25519_key_chain,
+        //     //   sender_claimed_ed25519_key: event.senderCurve25519Key,
+        //     },
+        //   },
+        // );
+        // console.log('ResponesFromVerificationReady', responseVerificationReady);
       }
-      if (event.getType() == 'm.room_key_request') {
+      if (event.getType() === 'm.room_key_request') {
         Alert.alert('Requesting Room KEY');
-        conosle.log('KEY_REQUEST_EVENT', event);
-        sendToDeviceForwardKeys(event);
+        console.log('KEY_REQUEST_EVENT', event);
+        // console.
+        console.log('THE DECRPTED EVENT', client.crypto.decryptEvent(event));
+        const responseForwardKey = await client.sendToDevice(
+          'm.forwarded_room_key',
+          {
+            algorithm: event.event.content.body.algorithm,
+            forwarding_curve25519_key_chain: event.forwardingCurve25519KeyChain,
+            room_id: event.event.content.body.room_id,
+            // sender_claimed_ed25519_key:
+            sender_key: event.event.content.body.sender_key,
+            session_id: event.event.content.body.session_id,
+
+            // user: userId,
+            // deviceId: deviceId,
+            // content: {
+            //   ...event.body,
+            //   forwarding_curve25519_key_chain:
+            //     event.forwarding_curve25519_key_chain,
+            //   sender_claimed_ed25519_key: event.senderCurve25519Key,
+            // },
+          },
+        );
+        // const responseForwardKey = forwardDeviceKeys(event);
+        // // this.fo;
+        // // let responseForwardKey = await this.forwardDeviceKeys(event);
+        console.log('responseForwardKey, ', responseForwardKey);
         // client.emit('m.forwarded_room_key', async function (response) {
         //   sendToDeviceForwardKeys();
         //   console.log("Hi, I'm Ready: m.key_key_request", response);
         // });
       }
+      // this;
     });
+
+    // this.forwardDeviceKeys()
 
     client.on('Room.receipt', async function (event, room) {
       console.log('THE ROOM ID', room.roomId);
@@ -868,31 +951,42 @@ export default class MatrixService {
 
     client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
       // Alert.alert('Listener Actvated');
-      console.log('EVENT', event);
+      // console.log('EVENT', event);
       // Alert.alert('Hi');
 
       if (event.event.type === 'm.room.encrypted') {
+        // Alert.alert('HI');
         // const event = client.crypto.decryptEvent(event);
-        this.autoVerify(event.event.room_id);
+        // this.autoVerify(event.event.room_id);
         // try {
         // let alteredEvent = event;
         // alteredEvent.
         console.log(
           '================= In Room Encrpted Text Start ==============',
         );
-        const eventExtraction = await client.crypto.decryptEvent(event);
-        console.log('The Event Extraction', eventExtraction);
+
+        // const ifNeededDecryption = await client.decryptEventIfNeeded(event);
+        // console.log('IF NEEDED DECRYPTION', ifNeededDecryption);
+
+        const eventHandled = await this.handleEvent(event.event);
+        const extractedMessage = await this.extractMessageFromMatrixEvent(
+          eventHandled,
+        );
+
+        // const extractMessageEvent = await this.extractMessageFromMatrixEvent(
+        //   eventHandled,
+        // );
+        // await client.crypto.decryptEvent(event);
+        console.log('The Event Extraction', eventHandled, extractedMessage);
         console.log('================= In Room Encrpted End ==============');
         // ({ body } = event.clearEvent.content);
         // } catch (error) {
         //   console.error('#### ', error);
         // }
-        return this.extractMessageFromEncryptedEvent(
-          event.event,
-          eventExtraction,
-        )
+        return this.extractMessageFromMatrixEvent(eventHandled)
           .then(message => {
-            callback(message);
+            // console.log('THE MESSAGE IN CALLBACK', message);
+            callback(message, event, this.userId);
           })
           .catch(console.log);
       }
@@ -901,7 +995,7 @@ export default class MatrixService {
         return;
       }
 
-      console.log('=======> onMessageReceive', event);
+      console.log('=======> ', event);
 
       // we are only intested in messages from the test room, which start with "!"
       if (event.getRoomId() === roomId) {
@@ -922,26 +1016,26 @@ export default class MatrixService {
     });
   }
 
-  async onGlobalMessageRecieve(callback) {
-    if (!callback) {
-      throw new Error(`No callback provided`);
-    }
-    const client = await this.getClient();
-    client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
-      if (event.getType() !== 'm.room.message') {
-        return;
-      }
+  // async onGlobalMessageRecieve(callback) {
+  //   if (!callback) {
+  //     throw new Error(`No callback provided`);
+  //   }
+  //   const client = await this.getClient();
+  //   client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
+  //     if (event.getType() !== 'm.room.message') {
+  //       return;
+  //     }
 
-      console.log('=======> onMessageReceive', event);
+  //     console.log('=======> onMessageReceive', event);
 
-      // we are only intested in messages from the test room, which start with "!"
-      this.extractMessageFromEvent(event)
-        .then(message => {
-          callback(message, event, this.userId);
-        })
-        .catch(console.log);
-    });
-  }
+  //     // we are only intested in messages from the test room, which start with "!"
+  //     this.extractMessageFromEvent(event)
+  //       .then(message => {
+  //         callback(message, event, this.userId);
+  //       })
+  //       .catch(console.log);
+  //   });
+  // }
 
   _extractPresenseFromContent(userId, content) {
     let presence = new UserPresense();
@@ -1014,25 +1108,25 @@ export default class MatrixService {
     return uploadResponse;
   }
 
-  async sendToDeviceForwardKeys(event) {
-    const client = await this.getClient();
-    if (!this.userId || this.deviceId) {
-      conosle.log(
-        'sendToDeviceForwardKeys: error -> userId || deviceId is undefined',
-      );
-      return;
-    }
-    const res = client.sendToDevice('m.forwarded_room_key', {
-      user: this.userId,
-      deviceId: this.deviceId,
-      content: {
-        ...event.body,
-        forwarding_curve25519_key_chain: event.forwarding_curve25519_key_chain,
-        sender_claimed_ed25519_key: event.senderCurve25519Key,
-      },
-    });
-    console.log('the res by forwarding keys', res);
-  }
+  // async forwardDeviceKeys(event) {
+  //   const client = await this.getClient();
+  //   if (!this.userId || !this.deviceId) {
+  //     conosle.log(
+  //       'sendToDeviceForwardKeys: error -> userId || deviceId is undefined',
+  //     );
+  //     return;
+  //   }
+  //   const res = await client.sendToDevice('m.forwarded_room_key', {
+  //     user: this.userId,
+  //     deviceId: this.deviceId,
+  //     content: {
+  //       ...event.body,
+  //       forwarding_curve25519_key_chain: event.forwarding_curve25519_key_chain,
+  //       sender_claimed_ed25519_key: event.senderCurve25519Key,
+  //     },
+  //   });
+  //   console.log('the res by forwarding keys', res);
+  // }
 
   async onReadLatestEvent(event) {
     let client = await this.getClient();
@@ -1117,12 +1211,14 @@ export default class MatrixService {
         'Logging in again with device ID... ',
         JSON.stringify(response),
       );
-      client = await sdk.createClient(
-        this.host,
-        response.access_token,
-        response.user_id,
-        response.device_id,
-      );
+
+      // this.init()
+      // client = await sdk.createClient(
+      //   this.host,
+      //   response.access_token,
+      //   response.user_id,
+      //   response.device_id,
+      // );
 
       this.client = client;
       this.user = response;
@@ -1169,6 +1265,88 @@ export default class MatrixService {
       }
       return data;
     }
+  }
+
+  // NEW METHODS =====================>
+
+  async extractMessageFromMatrixEvent(event) {
+    // if (
+    //   event.getType() !== 'm.room.message' ||
+    //   event.getType() !== 'm.room.encrypted'
+    // ) {
+    //   return null;
+    // }
+
+    let content = event.getContent();
+    let messageType = this.toMessageType(content.msgtype);
+
+    let userId = event.getSender();
+    let user = await this.getUserProfile(userId);
+
+    let message = await this.extractMessageContents(content, messageType);
+    message.message = content.body;
+    message.datetime = event.getDate();
+    message.room = event.getRoomId();
+    message.id = event.getId();
+    message.from = user;
+
+    return message;
+  }
+
+  async handleEvent(event) {
+    const client = await this.getClient();
+    if (!client) {
+      return conosle.log('Client Not Present');
+    }
+
+    let matrixEvent = new MatrixEvent(event);
+    // console.log('THE MATRIX EVENT', matrixEvent);
+    if (event.type === 'm.room.encrypted') {
+      try {
+        let decryptedEvent = await client.crypto.decryptEvent(matrixEvent);
+        // console.log('THE DECRYPTED EVENT: NEW METHOD', decryptedEvent);
+        matrixEvent.claimedEd25519Key = decryptedEvent.claimedEd25519Key;
+        matrixEvent.clearEvent = decryptedEvent.clearEvent;
+        matrixEvent.forwardingCurve25519KeyChain =
+          decryptedEvent.forwardingCurve25519KeyChain;
+        matrixEvent.senderCurve25519Key = decryptedEvent.senderCurve25519Key;
+        matrixEvent.untrusted = decryptedEvent.untrusted;
+      } catch (e) {
+        // console.log('THE EVENT HAS ISSUES', e);
+        matrixEvent.claimedEd25519Key = null;
+        matrixEvent.clearEvent = {
+          content: {body: `Unable to decrypt message ${e}`, msgtype: 'm.text'},
+          room_id: event.room_id,
+          type: 'm.room.message',
+        };
+        matrixEvent.forwardingCurve25519KeyChain = null;
+        matrixEvent.senderCurve25519Key = null;
+        matrixEvent.untrusted = undefined;
+      }
+    }
+    return matrixEvent;
+  }
+
+  async extractEventsInitialFromSync(allEvents) {
+    const messageEvents = allEvents.filter(
+      event =>
+        event.type == 'm.room.message' || event.type == 'm.room.encrypted',
+    );
+    const matrixEvents = messageEvents.map(event => this.handleEvent(event));
+    const resolveMatrixEvents = await Promise.all(matrixEvents);
+    console.log('THE MESAAGES', resolveMatrixEvents);
+    const extractMessageFromMatrixEvents = resolveMatrixEvents.map(event =>
+      this.extractMessageFromMatrixEvent(event),
+    );
+    const resolveExtractedMessagesFromMatrixEvent = await Promise.all(
+      extractMessageFromMatrixEvents,
+    );
+    console.log(
+      'THE RESOLVED EXTACTED MESSAGES',
+      resolveExtractedMessagesFromMatrixEvent,
+      extractMessageFromMatrixEvents,
+    );
+    return resolveExtractedMessagesFromMatrixEvent;
   }
 }
 

@@ -415,6 +415,7 @@ const ChatComponent = props => {
   };
 
   const formatMessage = msg => {
+    // console.log('THE MSG', msg);
     let messageUI = null;
     switch (msg.messageType) {
       case MessageType.TEXT:
