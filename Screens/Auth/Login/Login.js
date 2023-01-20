@@ -132,6 +132,13 @@ function Login(props) {
         onPress={() => loginToHomeserver(user.username, user.password)}
         disabled={load.loading}
       />
+      <Button
+        name={'Register'}
+        type="PRIMARY"
+        size={'LARGE'}
+        onPress={() => navigation.navigate('Register')}
+        // disabled={load.loading}
+      />
     </Screen>
   );
 }

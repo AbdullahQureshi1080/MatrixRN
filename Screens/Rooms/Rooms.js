@@ -90,15 +90,41 @@ export default function Rooms({navigation}) {
     );
   };
 
+  const callbackRoom = callbackData => {
+    console.log('Hello Room is created', callbackData);
+  };
+
+  const onPressCreateRoom = () => {
+    // Use to create a new room
+    const opts = {
+      name: "Let's do this",
+      members: ['@kaykay:localhost'],
+      enableEncryption: true,
+      visibility: 'private',
+      topic: '',
+      callbackRoom,
+    };
+    ChatService.createRoom(opts);
+    getRooms();
+  };
+
   return (
     <Screen>
       <Text style={styles.SCREEN_TITLE}>Rooms</Text>
       {/* <RoomList onRowPress={onRowPress} /> */}
+      <Button
+        name={'Create Room'}
+        type="PRIMARY"
+        size={'SMALL'}
+        onPress={() => onPressCreateRoom()}
+      />
+
       <FlatList
         data={rooms}
         renderItem={renderItem}
         keyExtractor={(item, index) => index.toString()}
       />
+
       <Button
         name={'Logout'}
         type="PRIMARY"

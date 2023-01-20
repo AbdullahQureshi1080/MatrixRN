@@ -196,7 +196,7 @@ export default class MatrixService {
     }
 
     if (!useCredentials) {
-      let client = sdk.createClient(this.host);
+      let client = sdk.createClient({baseUrl: this.host});
       this.client = client;
       return Alert.alert('No Data');
     }
@@ -273,6 +273,7 @@ export default class MatrixService {
   async getUserProfile(userId) {
     const client = await this.getClient();
     // const chat = await client.getRoomMessagesFromRoomID();
+
     let profile = await client.getProfileInfo(userId);
     profile = {...profile, userId};
 
@@ -398,6 +399,8 @@ export default class MatrixService {
     let c = await client.roomInitialSync(roomId, 100);
 
     const room = await this.getRoomById(roomId);
+
+    client.setRoomEncryption(roomId, {algorithm: 'm.megolm.v1.aes-sha2'});
 
     // FOR END TO END START =================
     // console.log('All The Events', room);
@@ -832,6 +835,7 @@ export default class MatrixService {
     const forwardDeviceKeys = this.forwardDeviceKeys;
     const userId = this.userId;
     const deviceId = this.deviceId;
+
     // console.log('CLIENT: onMessageRecieve', client, roomId);
 
     // client.on('event', async function (event, room) {
@@ -841,159 +845,159 @@ export default class MatrixService {
 
     client.on('toDeviceEvent', async function (event, room) {
       Alert.alert('TO Device Event');
+      console.log('TO DEVICE EVENT', event);
+      // if (event.getType() === 'm.key.verification.request') {
+      //   console.log('THE EVENT: VERIFICATION', event);
+      //   // const responseVerificationReady = client.sendToDevice(
+      //   //   'm.key.verification.ready',
+      //   //   {
+      //   //     // from_device:
+      //   //     // user: userId,
+      //   //     // deviceId: deviceId,
+      //   //     // content: {
+      //   //     //   ...event.body,
+      //   //     //   forwarding_curve25519_key_chain:
+      //   //     //     event.forwarding_curve25519_key_chain,
+      //   //     //   sender_claimed_ed25519_key: event.senderCurve25519Key,
+      //   //     },
+      //   //   },
+      //   // );
+      //   // console.log('ResponesFromVerificationReady', responseVerificationReady);
+      // }
+      // if (event.getType() === 'm.room_key_request') {
+      //   Alert.alert('Requesting Room KEY');
+      //   console.log('KEY_REQUEST_EVENT', event);
+      //   // console.
+      //   console.log('THE DECRPTED EVENT', client.crypto.decryptEvent(event));
+      //   const responseForwardKey = await client.sendToDevice(
+      //     'm.forwarded_room_key',
+      //     {
+      //       algorithm: event.event.content.body.algorithm,
+      //       forwarding_curve25519_key_chain: event.forwardingCurve25519KeyChain,
+      //       room_id: event.event.content.body.room_id,
+      //       // sender_claimed_ed25519_key:
+      //       sender_key: event.event.content.body.sender_key,
+      //       session_id: event.event.content.body.session_id,
 
-      if (event.getType() === 'm.key.verification.request') {
-        console.log('THE EVENT: VERIFICATION', event);
-        // const responseVerificationReady = client.sendToDevice(
-        //   'm.key.verification.ready',
-        //   {
-        //     // from_device:
-        //     // user: userId,
-        //     // deviceId: deviceId,
-        //     // content: {
-        //     //   ...event.body,
-        //     //   forwarding_curve25519_key_chain:
-        //     //     event.forwarding_curve25519_key_chain,
-        //     //   sender_claimed_ed25519_key: event.senderCurve25519Key,
-        //     },
-        //   },
-        // );
-        // console.log('ResponesFromVerificationReady', responseVerificationReady);
-      }
-      if (event.getType() === 'm.room_key_request') {
-        Alert.alert('Requesting Room KEY');
-        console.log('KEY_REQUEST_EVENT', event);
-        // console.
-        console.log('THE DECRPTED EVENT', client.crypto.decryptEvent(event));
-        const responseForwardKey = await client.sendToDevice(
-          'm.forwarded_room_key',
-          {
-            algorithm: event.event.content.body.algorithm,
-            forwarding_curve25519_key_chain: event.forwardingCurve25519KeyChain,
-            room_id: event.event.content.body.room_id,
-            // sender_claimed_ed25519_key:
-            sender_key: event.event.content.body.sender_key,
-            session_id: event.event.content.body.session_id,
-
-            // user: userId,
-            // deviceId: deviceId,
-            // content: {
-            //   ...event.body,
-            //   forwarding_curve25519_key_chain:
-            //     event.forwarding_curve25519_key_chain,
-            //   sender_claimed_ed25519_key: event.senderCurve25519Key,
-            // },
-          },
-        );
-        // const responseForwardKey = forwardDeviceKeys(event);
-        // // this.fo;
-        // // let responseForwardKey = await this.forwardDeviceKeys(event);
-        console.log('responseForwardKey, ', responseForwardKey);
-        // client.emit('m.forwarded_room_key', async function (response) {
-        //   sendToDeviceForwardKeys();
-        //   console.log("Hi, I'm Ready: m.key_key_request", response);
-        // });
-      }
+      //       // user: userId,
+      //       // deviceId: deviceId,
+      //       // content: {
+      //       //   ...event.body,
+      //       //   forwarding_curve25519_key_chain:
+      //       //     event.forwarding_curve25519_key_chain,
+      //       //   sender_claimed_ed25519_key: event.senderCurve25519Key,
+      //       // },
+      //     },
+      //   );
+      //   // const responseForwardKey = forwardDeviceKeys(event);
+      //   // // this.fo;
+      //   // // let responseForwardKey = await this.forwardDeviceKeys(event);
+      //   console.log('responseForwardKey, ', responseForwardKey);
+      //   // client.emit('m.forwarded_room_key', async function (response) {
+      //   //   sendToDeviceForwardKeys();
+      //   //   console.log("Hi, I'm Ready: m.key_key_request", response);
+      //   // });
+      // }
       // this;
     });
 
     // this.forwardDeviceKeys()
 
-    client.on('Room.receipt', async function (event, room) {
-      console.log('THE ROOM ID', room.roomId);
-      console.log('EVENT THAT HAS BEEN READ', event, room);
-      if (room.roomId === roomId) {
-        // console.log('EVENT THAT HAS BEEN READ', event, room);
-        // event
-        var receiptContent = event.getContent();
-        var eventKeys = Object.keys(receiptContent);
-        var eventId = eventKeys[0];
-        console.log('Hello', receiptContent, eventId, eventKeys);
-        var matrixMessageEvent = room.timeline.filter(
-          me => me.event.event_id == eventId,
-        );
-        let senderObj = null;
-        let senderKey = null;
-        if (receiptContent) {
-          senderObj = receiptContent[eventId]['m.read'];
-          senderKey = Object.keys(senderObj)[0];
-          console.log('THE SENDER OBJ,KEY', senderObj, senderKey);
-          let eventAlterRes = {
-            sender: {
-              userId: senderKey,
-            },
-          };
+    // client.on('Room.receipt', async function (event, room) {
+    //   console.log('THE ROOM ID', room.roomId);
+    //   console.log('EVENT THAT HAS BEEN READ', event, room);
+    //   if (room.roomId === roomId) {
+    //     // console.log('EVENT THAT HAS BEEN READ', event, room);
+    //     // event
+    //     var receiptContent = event.getContent();
+    //     var eventKeys = Object.keys(receiptContent);
+    //     var eventId = eventKeys[0];
+    //     console.log('Hello', receiptContent, eventId, eventKeys);
+    //     var matrixMessageEvent = room.timeline.filter(
+    //       me => me.event.event_id == eventId,
+    //     );
+    //     let senderObj = null;
+    //     let senderKey = null;
+    //     if (receiptContent) {
+    //       senderObj = receiptContent[eventId]['m.read'];
+    //       senderKey = Object.keys(senderObj)[0];
+    //       console.log('THE SENDER OBJ,KEY', senderObj, senderKey);
+    //       let eventAlterRes = {
+    //         sender: {
+    //           userId: senderKey,
+    //         },
+    //       };
 
-          console.log(
-            'THE MATRIX MESSAGE EVENT READ WALA',
-            matrixMessageEvent[0],
-          );
-          if (senderKey !== room.myUserId) {
-            // Alert.alert('HIya');
-            let setRoomReadMarker = await client.setRoomReadMarkers(
-              roomId,
-              eventId,
-              matrixMessageEvent[0],
-            );
-            // await client.sendReadReceipt(matrixMessageEvent[0]);
-            console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
-          }
-          // let setRoomReadMarker = await client.setRoomReadMarkers(
-          //   roomId,
-          //   eventId,
-          //   matrixMessageEvent[0],
-          // );
-          // console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
-          callback(null, eventAlterRes, room.myUserId);
-        }
-      }
-    });
+    //       console.log(
+    //         'THE MATRIX MESSAGE EVENT READ WALA',
+    //         matrixMessageEvent[0],
+    //       );
+    //       if (senderKey !== room.myUserId) {
+    //         // Alert.alert('HIya');
+    //         let setRoomReadMarker = await client.setRoomReadMarkers(
+    //           roomId,
+    //           eventId,
+    //           matrixMessageEvent[0],
+    //         );
+    //         // await client.sendReadReceipt(matrixMessageEvent[0]);
+    //         console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
+    //       }
+    //       // let setRoomReadMarker = await client.setRoomReadMarkers(
+    //       //   roomId,
+    //       //   eventId,
+    //       //   matrixMessageEvent[0],
+    //       // );
+    //       // console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
+    //       callback(null, eventAlterRes, room.myUserId);
+    //     }
+    //   }
+    // });
+
+    // client.on('RoomState.newMember', async (event, room, toStartOfTimeline) => {
+    //   console.log('Hello ROOM STATE EVENT NEW MEMBER', event);
+    // });
 
     client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
       // Alert.alert('Listener Actvated');
       // console.log('EVENT', event);
       // Alert.alert('Hi');
 
-      if (event.event.type === 'm.room.encrypted') {
-        // Alert.alert('HI');
-        // const event = client.crypto.decryptEvent(event);
-        // this.autoVerify(event.event.room_id);
-        // try {
-        // let alteredEvent = event;
-        // alteredEvent.
-        console.log(
-          '================= In Room Encrpted Text Start ==============',
-        );
+      // if (event.event.type === 'm.room.encrypted') {
+      //   // Alert.alert('HI');
+      //   // const event = client.crypto.decryptEvent(event);
+      //   // this.autoVerify(event.event.room_id);
+      //   // try {
+      //   // let alteredEvent = event;
+      //   // alteredEvent.
+      //   console.log(
+      //     '================= In Room Encrpted Text Start ==============',
+      //   );
 
-        // const ifNeededDecryption = await client.decryptEventIfNeeded(event);
-        // console.log('IF NEEDED DECRYPTION', ifNeededDecryption);
+      //   // const ifNeededDecryption = await client.decryptEventIfNeeded(event);
+      //   // console.log('IF NEEDED DECRYPTION', ifNeededDecryption);
 
-        const eventHandled = await this.handleEvent(event.event);
-        const extractedMessage = await this.extractMessageFromMatrixEvent(
-          eventHandled,
-        );
+      //   const eventHandled = await this.handleEvent(event.event);
+      //   const extractedMessage = await this.extractMessageFromMatrixEvent(
+      //     eventHandled,
+      //   );
 
-        // const extractMessageEvent = await this.extractMessageFromMatrixEvent(
-        //   eventHandled,
-        // );
-        // await client.crypto.decryptEvent(event);
-        console.log('The Event Extraction', eventHandled, extractedMessage);
-        console.log('================= In Room Encrpted End ==============');
-        // ({ body } = event.clearEvent.content);
-        // } catch (error) {
-        //   console.error('#### ', error);
-        // }
-        return this.extractMessageFromMatrixEvent(eventHandled)
-          .then(message => {
-            // console.log('THE MESSAGE IN CALLBACK', message);
-            callback(message, event, this.userId);
-          })
-          .catch(console.log);
-      }
-
-      if (event.getType() !== 'm.room.message') {
-        return;
-      }
+      //   // const extractMessageEvent = await this.extractMessageFromMatrixEvent(
+      //   //   eventHandled,
+      //   // );
+      //   // await client.crypto.decryptEvent(event);
+      //   console.log('The Event Extraction', eventHandled, extractedMessage);
+      //   console.log('================= In Room Encrpted End ==============');
+      //   // ({ body } = event.clearEvent.content);
+      //   // } catch (error) {
+      //   //   console.error('#### ', error);
+      //   // }
+      //   this.extractMessageFromMatrixEvent(eventHandled)
+      //     .then(message => {
+      //       // console.log('THE MESSAGE IN CALLBACK', message);
+      //       callback(message, event, this.userId);
+      //     })
+      //     .catch(console.log);
+      // }
 
       console.log('=======> ', event);
 
@@ -1195,7 +1199,7 @@ export default class MatrixService {
     try {
       let user = username;
       console.log('Logging in as %s on %s', user, this.host);
-      let client = await sdk.createClient(this.host);
+      let client = sdk.createClient({baseUrl: this.host});
       console.log('Logging in to created client...', client);
       // let user = await client.login('m.login.password', {
       //   user: username,
@@ -1347,6 +1351,28 @@ export default class MatrixService {
       extractMessageFromMatrixEvents,
     );
     return resolveExtractedMessagesFromMatrixEvent;
+  }
+
+  async createRoom(opts) {
+    const client = await this.getClient();
+    const optsRoom = {
+      name: opts.name,
+      invite: opts.members,
+      visibility: opts.visibility,
+    };
+
+    const roomId = await client.createRoom(optsRoom, opts.callback);
+    console.log('Room Id in room creation', roomId);
+    // if (roomId && opts.enableEncryption) {
+    //   client.setRoomEncryption(roomId, {algorithm: 'm.megolm.v1.aes-sha2'});
+    // }
+    return roomId;
+  }
+
+  async registerAccount(username, password) {
+    const client = await this.getClient();
+    const registerUser = await client.register(username, password);
+    return registerUser;
   }
 }
 

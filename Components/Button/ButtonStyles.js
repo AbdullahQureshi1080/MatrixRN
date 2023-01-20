@@ -22,10 +22,10 @@ const styles = (isDarkMode, size) =>
       color: Colors.light,
       fontWeight: '700',
     },
-    PRIMARY: {
-      position: 'absolute',
-      bottom: 0,
-    },
+    // PRIMARY: {
+    //   position: 'absolute',
+    //   bottom: 0,
+    // },
   });
 
 export default styles;
