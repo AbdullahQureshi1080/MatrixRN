@@ -81,7 +81,7 @@ function Register(props) {
       <View style={styles.SECTION_CONTAINER}>
         <Text style={styles.SECTION_TITLE}>Register</Text>
         <Text style={[styles.SECTION_TITLE, {color: 'red'}]}>
-          Not Currently Working
+          Not Currently Working, will fix this 
         </Text>
         <View style={styles.INPUT_BOX}>
           <Text style={styles.LABEL}>Username</Text>
