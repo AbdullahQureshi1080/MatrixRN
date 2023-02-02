@@ -50,29 +50,11 @@ function Register(props) {
 
     const result = await MatrixService.registerAccount(username, password);
     console.log('THE RESULT', result);
-    // if (result && !result.error) {
-    //   // storeUserMatrixData(result);
-    //   // loginUser(dispatch, result);
-    //   return;
-    // }
-    // if (result.error) {
-    //   //   dispatch({type: 'SET_LOADING', payload: result.error});
-    //   console.log('Error logging in: ', result);
-
-    //   const tryingAgain = await MatrixService.loginWithPassword(
-    //     username,
-    //     password,
-    //     Config.CHAT_SERVER_URL,
-    //     true, // enable crypto? default false
-    //   );
-    //   console.log('THE RESULT', tryingAgain);
-    //   if (result && !result.error) {
-    //     // storeUserMatrixData(tryingAgain);
-    //     loginUser(dispatch, result);
-    //     // return loadDispatch({type: 'SET_LOADING', payload: false});
-    //   }
-    //   //   setError(result.message);
-    // }
+    if (result && !result.error) {
+      storeUserMatrixData(result);
+      loginUser(dispatch, result);
+      return;
+    }
   };
 
   return (
@@ -80,9 +62,6 @@ function Register(props) {
       <Text style={styles.SCREEN_TITLE}>MATRIX CHAT</Text>
       <View style={styles.SECTION_CONTAINER}>
         <Text style={styles.SECTION_TITLE}>Register</Text>
-        <Text style={[styles.SECTION_TITLE, {color: 'red'}]}>
-          Not Currently Working, will fix this 
-        </Text>
         <View style={styles.INPUT_BOX}>
           <Text style={styles.LABEL}>Username</Text>
           <TextInput

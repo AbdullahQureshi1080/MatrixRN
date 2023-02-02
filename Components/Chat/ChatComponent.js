@@ -546,7 +546,9 @@ const ChatComponent = props => {
             <TouchableOpacity
               style={styles.button}
               onPress={() => handleTextSend()}
-              disabled={props.chatClosed}></TouchableOpacity>
+              disabled={props.chatClosed}>
+              <Text>{`>`}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableWithoutFeedback>

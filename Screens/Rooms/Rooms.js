@@ -17,8 +17,7 @@ import {getUserMatrixData, removeUserMatrixData} from '../../Utils/Storage';
 import Button from '../../Components/Button/Button';
 import {logoutUser, useUserContext} from '../../Context/AppContext';
 import ChatService from '../../Services/MatrixChatService';
-
-// import matrix from '../../App';
+import VerificationModal from '../Verification/Verification';
 
 if (!Promise.allSettled) {
   Promise.allSettled = promises =>
@@ -31,13 +30,31 @@ if (!Promise.allSettled) {
     );
 }
 
+// import {
+//   IsLoggedIn,
+//   Login,
+//   MatrixService,
+//   StartClient,
+// } from '../../matrix-helpers/matrix';
+// import {PrepareSync} from '../../matrix-helpers/sync';
+
 export default function Rooms({navigation}) {
   const {store, dispatch} = useUserContext();
 
   const [rooms, setRooms] = useState([]);
 
+  const [isVisible, setIsVisible] = useState(false);
+
+  const [incomingVerificationRequest, setIncommingVerificationRequest] =
+    useState(null);
+
+  // Verification Actions  &  States
+
+  // const [emojies, setEmojies] = useState([]);
+
   useEffect(() => {
     console.log('THE MATRIX SERVICE CLIENT: ROOMS', ChatService);
+    ChatService.onGlobalListener(setIncommingVerificationRequest);
     // if (ChatService) {
     getRooms();
     // }
@@ -57,14 +74,14 @@ export default function Rooms({navigation}) {
     }
   }, [rooms]);
 
+  useEffect(() => {
+    if (incomingVerificationRequest) {
+      setIsVisible(true);
+    }
+  }, [incomingVerificationRequest]);
+
   const isDarkMode = useColorScheme() === 'dark';
   const styles = newStyles(isDarkMode);
-
-  // const {isReady, isSynced} = useMatrix();
-
-  // const {roomList, inviteList, updateLists} = useRoomList();
-  //
-  // console.log('THE ROOM LIST', roomList);
 
   const onRowPress = item => {
     navigation.navigate('Room', {room: item});
@@ -77,10 +94,6 @@ export default function Rooms({navigation}) {
 
   const renderItem = ({item, inde}) => {
     const room = item;
-    // const lastMessage = item.timeline.filter(
-    //   ms => ms.event.type === 'm.room.message',
-    // )[0];
-    // console.log('THE MESSAGE', lastMessage);
     let roomName = room.name;
     return (
       <TouchableOpacity style={styles.ROOM} onPress={() => onRowPress(item)}>
@@ -97,11 +110,11 @@ export default function Rooms({navigation}) {
   const onPressCreateRoom = () => {
     // Use to create a new room
     const opts = {
-      name: "Let's do this",
-      members: ['@kaykay:localhost'],
+      name: 'Dount Day',
+      members: ['@red:localhost'],
       enableEncryption: true,
       visibility: 'private',
-      topic: '',
+      topic: 'Wisconsin Group High',
       callbackRoom,
     };
     ChatService.createRoom(opts);
@@ -111,12 +124,31 @@ export default function Rooms({navigation}) {
   return (
     <Screen>
       <Text style={styles.SCREEN_TITLE}>Rooms</Text>
-      {/* <RoomList onRowPress={onRowPress} /> */}
+
       <Button
         name={'Create Room'}
         type="PRIMARY"
-        size={'SMALL'}
+        size={'LARGE'}
         onPress={() => onPressCreateRoom()}
+      />
+
+      <Button
+        name={'Start Verification'}
+        type="PRIMARY"
+        size={'LARGE'}
+        onPress={() => {
+          if (!rooms) {
+            return alert('Syncing in progress, please wait');
+          }
+          setIsVisible(true);
+        }}
+        style={{
+          borderRadius: 8,
+          height: 40,
+          justifyContent: 'center',
+          alignItems: 'center',
+          alignSelf: 'center',
+        }}
       />
 
       <FlatList
@@ -125,10 +157,19 @@ export default function Rooms({navigation}) {
         keyExtractor={(item, index) => index.toString()}
       />
 
+      {isVisible && (
+        <VerificationModal
+          isVisible={isVisible}
+          setIsVisible={setIsVisible}
+          ChatService={ChatService}
+          verificationRequest={incomingVerificationRequest}
+        />
+      )}
+
       <Button
         name={'Logout'}
         type="PRIMARY"
-        size={'SMALL'}
+        size={'LARGE'}
         onPress={() => onPressLogout()}
       />
     </Screen>

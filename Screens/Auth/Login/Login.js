@@ -23,11 +23,20 @@ import {storeUserMatrixData} from '../../../Utils/Storage';
 
 import {loginUser, useUserContext} from '../../../Context/AppContext';
 
+
 // import matrix from '../../../App';
 // import MatrixService from '../../../Services/MatrixChatService';
 
 import matrix from '../../../App';
 import MatrixService from '../../../Services/MatrixChatService';
+
+// import {
+//   IsLoggedIn,
+//   Login as AuthLogin,
+//   MatrixService,
+//   StartClient,
+// } from '../../../matrix-helpers/matrix';
+// import {PrepareSync} from '../../../matrix-helpers/sync';
 
 function Login(props) {
   const {store, dispatch} = useUserContext();
@@ -49,6 +58,11 @@ function Login(props) {
       return Alert.alert('Please enter username & password');
     }
 
+    // AuthLogin(username, password).then(async () => {
+    //   await StartClient();
+    //   await PrepareSync();
+    // });
+
     // let newMatrix = new MatrixService();
     // if (!matrix) {
     //   newMatrix = new MatrixService();
@@ -66,24 +80,24 @@ function Login(props) {
       loginUser(dispatch, result);
       return;
     }
-    if (result.error) {
-      //   dispatch({type: 'SET_LOADING', payload: result.error});
-      console.log('Error logging in: ', result);
+    // if (result.error) {
+    //   //   dispatch({type: 'SET_LOADING', payload: result.error});
+    //   console.log('Error logging in: ', result);
 
-      const tryingAgain = await MatrixService.loginWithPassword(
-        username,
-        password,
-        Config.CHAT_SERVER_URL,
-        true, // enable crypto? default false
-      );
-      console.log('THE RESULT', tryingAgain);
-      if (result && !result.error) {
-        // storeUserMatrixData(tryingAgain);
-        loginUser(dispatch, result);
-        // return loadDispatch({type: 'SET_LOADING', payload: false});
-      }
-      //   setError(result.message);
-    }
+    //   const tryingAgain = await MatrixService.loginWithPassword(
+    //     username,
+    //     password,
+    //     Config.CHAT_SERVER_URL,
+    //     true, // enable crypto? default false
+    //   );
+    //   console.log('THE RESULT', tryingAgain);
+    //   if (result && !result.error) {
+    //     // storeUserMatrixData(tryingAgain);
+    //     loginUser(dispatch, result);
+    //     // return loadDispatch({type: 'SET_LOADING', payload: false});
+    //   }
+    //   //   setError(result.message);
+    // }
   };
 
   return (
