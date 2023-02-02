@@ -152,12 +152,24 @@ export default function Room({route, navigation}) {
     return uploadResponse;
   };
 
+  const onPressRequestRoomKeys = () => {
+    ChatService.requestRoomKeys(roomId);
+  };
+
   return (
     <Screen>
       <TouchableOpacity onPress={() => navigation.goBack()}>
         <Text>Back</Text>
       </TouchableOpacity>
       <Text style={styles.SCREEN_TITLE}>Room</Text>
+
+      <Button
+        name={'Request Room Keys'}
+        type="PRIMARY"
+        size={'LARGE'}
+        onPress={() => onPressRequestRoomKeys()}
+      />
+
       <ChatComponent
         // matrixCredentials={room}
         usersPresence={usersPresence}
