@@ -18,6 +18,10 @@ import Button from '../../Components/Button/Button';
 import {logoutUser, useUserContext} from '../../Context/AppContext';
 import ChatService from '../../Services/MatrixChatService';
 import VerificationModal from '../Verification/Verification';
+import CreateRoom from '../CreateRoom/CreateRoom';
+
+import '../../Services/poly';
+import {IndexedDBCryptoStore, IndexedDBStore} from 'matrix-js-sdk';
 
 if (!Promise.allSettled) {
   Promise.allSettled = promises =>
@@ -44,6 +48,7 @@ export default function Rooms({navigation}) {
   const [rooms, setRooms] = useState([]);
 
   const [isVisible, setIsVisible] = useState(false);
+  const [isRoomVisible, setIsRoomVisible] = useState(false);
 
   const [incomingVerificationRequest, setIncommingVerificationRequest] =
     useState(null);
@@ -55,6 +60,7 @@ export default function Rooms({navigation}) {
   useEffect(() => {
     console.log('THE MATRIX SERVICE CLIENT: ROOMS', ChatService);
     ChatService.onGlobalListener(setIncommingVerificationRequest);
+
     // if (ChatService) {
     getRooms();
     // }
@@ -71,6 +77,7 @@ export default function Rooms({navigation}) {
   useEffect(() => {
     if (rooms.length) {
       console.log('THE ROOMS: ROOMS', rooms);
+      // ChatService.getBackup()
     }
   }, [rooms]);
 
@@ -89,6 +96,32 @@ export default function Rooms({navigation}) {
 
   const onPressLogout = () => {
     removeUserMatrixData();
+    // console.log(
+    //   'DB NAME',
+    //   window.indexedDB.databases().then(r => {
+    //     console.log('r - ', r);
+    //   }),
+    // );
+    // window.indexedD
+    window.indexedDB
+      .databases()
+      .then(r => {
+        for (var i = 0; i < r.length; i++) indexedDB.deleteDatabase(r[i].name);
+      })
+      .then(() => {
+        alert('All data cleared.');
+      });
+    // // console.log('DATEBASES-IDBFactory', window.indexedDB.prototype.databases());
+    // console.log('WINDOW', window);
+
+    // console.log('DATEBASES-indexedDB', window.indexedDB.databases());
+
+    // window.IDBFactory.then(r => {
+    //   for (var i = 0; i < r.length; i++) IDBDatabase.deleteDatabase(r[i].name);
+    // }).then(() => {
+    //   alert('All data cleared.');
+    // });
+
     logoutUser(dispatch);
   };
 
@@ -105,31 +138,32 @@ export default function Rooms({navigation}) {
 
   const callbackRoom = callbackData => {
     console.log('Hello Room is created', callbackData);
-  };
-
-  const onPressCreateRoom = () => {
-    // Use to create a new room
-    const opts = {
-      name: 'Dount Day',
-      members: ['@red:localhost'],
-      enableEncryption: true,
-      visibility: 'private',
-      topic: 'Wisconsin Group High',
-      callbackRoom,
-    };
-    ChatService.createRoom(opts);
-    getRooms();
+    if (callbackData) {
+      getRooms();
+    }
   };
 
   return (
     <Screen>
-      <Text style={styles.SCREEN_TITLE}>Rooms</Text>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginHorizontal: 20,
+        }}>
+        <Text style={styles.SCREEN_TITLE}>Rooms</Text>
+
+        <TouchableOpacity onPress={getRooms}>
+          <Text style={styles.ROOM_MESSAGE}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
 
       <Button
         name={'Create Room'}
         type="PRIMARY"
         size={'LARGE'}
-        onPress={() => onPressCreateRoom()}
+        onPress={() => setIsRoomVisible(true)}
       />
 
       <Button
@@ -163,6 +197,15 @@ export default function Rooms({navigation}) {
           setIsVisible={setIsVisible}
           ChatService={ChatService}
           verificationRequest={incomingVerificationRequest}
+        />
+      )}
+
+      {isRoomVisible && (
+        <CreateRoom
+          isVisible={isRoomVisible}
+          setIsVisible={setIsRoomVisible}
+          ChatService={ChatService}
+          callbackRoom={callbackRoom}
         />
       )}
 

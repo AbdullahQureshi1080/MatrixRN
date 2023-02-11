@@ -29,6 +29,7 @@ import {OlmDevice} from 'matrix-js-sdk/lib/crypto/OlmDevice';
 import {CryptoService, StartVerification} from './crypto';
 import {SasEvent} from 'matrix-js-sdk/lib/crypto/verification/SAS';
 import {accounts} from '../Api/static';
+import {deriveKey} from 'matrix-js-sdk/src/crypto/key_passphrase';
 
 // import localStorage
 
@@ -102,6 +103,7 @@ export default class MatrixService {
         searchParams.delete('_');
         return fetch(url, args);
       },
+      cryptoCallbacks: {getSecretStorageKey: this.custom_getSecretStorageKey},
     });
     this.deviceId = matrixCredentials.deviceId;
     this.userId = matrixCredentials.userId;
@@ -119,7 +121,13 @@ export default class MatrixService {
 
     // .then(async () => {
     //   client.setGlobalErrorOnUnknownDevices(false);
-    await client.startClient({initialSyncLimit: 10});
+    await client.startClient({initialSyncLimit: 10}).then(() => {
+      if (client.isCryptoEnabled()) {
+        this.setAndEnableBackup();
+      } else {
+        alert('Error setting backup!');
+      }
+    });
 
     // });
 
@@ -140,6 +148,12 @@ export default class MatrixService {
     });
 
     await clientSyncPromise;
+
+    // const restoreBackup = this.restoreBackup(
+    //   client,
+    //   backup,
+    //   matrixCredentials.passphrase,
+    // );
 
     // this.verifyDevice(
     //   client,
@@ -178,8 +192,9 @@ export default class MatrixService {
   async logOut() {
     try {
       const client = await this.getClient();
-      await client.logout();
-      this.ready = false;
+
+      // await client.logout();
+      client.this.ready = false;
       this.client = null;
       this.accessToken = null;
       this.userId = null;
@@ -208,7 +223,7 @@ export default class MatrixService {
           searchParams.delete('_');
           return fetch(url, args);
         },
-
+        // cryptoCallbacks: {getSecretStorageKey: this.custom_getSecretStorageKey},
         ...MATRIX_CLIENT_START_OPTIONS,
       });
       this.client = client;
@@ -221,7 +236,7 @@ export default class MatrixService {
         // console.log('Public Rooms: %s', JSON.stringify(data));
       });
       this.client = client;
-
+      // this.setAndEnableBackup(client);
       return client;
     } catch (error) {
       return error;
@@ -413,6 +428,8 @@ export default class MatrixService {
     let c = await client.roomInitialSync(roomId, 100);
 
     const room = await this.getRoomById(roomId);
+
+    this.autoVerify(roomId);
 
     const accountData = room.accountData;
 
@@ -808,26 +825,6 @@ export default class MatrixService {
     return message;
   }
 
-  async forwardDeviceKeys(event) {
-    const client = await this.getClient();
-    if (!this.userId || !this.deviceId) {
-      conosle.log(
-        'sendToDeviceForwardKeys: error -> userId || deviceId is undefined',
-      );
-      return;
-    }
-    const res = await client.sendToDevice('m.forwarded_room_key', {
-      user: this.userId,
-      deviceId: this.deviceId,
-      content: {
-        ...event.body,
-        forwarding_curve25519_key_chain: event.forwarding_curve25519_key_chain,
-        sender_claimed_ed25519_key: event.senderCurve25519Key,
-      },
-    });
-    console.log('the res by forwarding keys', res);
-  }
-
   async onMessageReceive(roomId, callback) {
     // Alert.alert('Listener Actvated');
     if (!callback) {
@@ -843,13 +840,14 @@ export default class MatrixService {
 
       if (event.getType() === 'm.room_key_request') {
         console.log('Device Listener ->  m.room_key_request', event);
-        client.sendToDevice('m.forwarded_room_key', {
+        const contentMap = {
           messages: {
             [userId]: {
               [deviceId]: {...event.event.content},
             },
           },
-        });
+        };
+        client.sendToDevice('m.forwarded_room_key', contentMap);
       }
 
       // if (event.getType() === 'm.forwarded_room_key') {
@@ -1054,13 +1052,14 @@ export default class MatrixService {
 
       if (event.getType() === 'm.room_key_request') {
         console.log('Device Listener ->  m.room_key_request', event);
-        client.sendToDevice('m.forwarded_room_key', {
+        const contentMap = {
           messages: {
             [userId]: {
               [deviceId]: {...event.event.content},
             },
           },
-        });
+        };
+        client.sendToDevice('m.forwarded_room_key', contentMap);
       }
 
       if (event.getType() === 'm.key.verification.request') {
@@ -1086,7 +1085,9 @@ export default class MatrixService {
         //   // },
         // });
 
+        // if (callback && event.verificationRequest) {
         callback(event.verificationRequest);
+        // }
       }
 
       // if (event.getType() === 'm.key.verification.ready') {
@@ -1158,40 +1159,34 @@ export default class MatrixService {
     });
   }
 
-  async requestRoomKeys(roomId) {
+  async requestRoomKeys(roomId, event) {
     const client = await this.getClient();
     const room = client.getRoom(roomId);
     const userId = this.userId;
     const deviceId = this.deviceId;
     const sessionId = client.getSessionId();
     const senderkey = client.getDeviceCurve25519Key();
-
-    const devices = await client.getDevices();
+    const members = room.getMembers().map(user => ({
+      userId: user.userId,
+      deviceId: client.getStoredDevicesForUser(user.userId)[0].deviceId,
+    }));
 
     const roomKeyRequest = {
       algorithm: 'm.megolm.v1.aes-sha2',
       room_id: roomId,
       session_id: sessionId,
       sender_key: senderkey,
+      recipients: members,
     };
 
-    console.log('Sender Key', roomKeyRequest, devices);
+    console.log('Sender Key', roomKeyRequest);
 
-    // room.
-
-    // client.roomReq
-    // const request = client.request
-    // const res = await client.sendToDevice('m.room_key_request', {
-    //   messages: {
-    //     [userId]: {
-    //       [deviceId]: {...event.event.content},
-    //     },
-    //   },
-    // });
-    // console.log('Send a room key request', res);
-    const res = await client.crypto.requestRoomKey(roomKeyRequest, [], true);
+    const res = await client.crypto.requestRoomKey(
+      roomKeyRequest,
+      members,
+      true,
+    );
     console.log('RES', res);
-    // client.sendT
   }
 
   _extractPresenseFromContent(userId, content) {
@@ -1360,6 +1355,7 @@ export default class MatrixService {
           searchParams.delete('_');
           return fetch(url, args);
         },
+        cryptoCallbacks: {getSecretStorageKey: this.custom_getSecretStorageKey},
         ...MATRIX_CLIENT_START_OPTIONS,
       });
       console.log('Logging in to created client...', client);
@@ -1370,23 +1366,23 @@ export default class MatrixService {
 
       let account = getDataFromStaticList[0];
 
-      //  console.log('There was an error with login in');
-      let response = await client.login('m.login.password', {
-        user: username,
-        password: password,
-        device_id: account.deviceId,
-      });
+      // //  console.log('There was an error with login in');
+      // let response = await client.login('m.login.password', {
+      //   user: username,
+      //   password: password,
+      //   device_id: account?.deviceId,
+      // });
 
-      console.log('Logging In', response);
+      console.log('Logging In', account);
 
       let data = {
         userId: account.user_id,
-        accessToken: response.access_token,
+        accessToken: account.access_token,
         homeserver: this.host,
         deviceId: account.device_id,
         crypto: true,
         error: true,
-        ...response,
+        ...account,
       };
 
       this.client = client;
@@ -1523,6 +1519,9 @@ export default class MatrixService {
     // if (roomId && opts.enableEncryption) {
     //   client.setRoomEncryption(roomId, {algorithm: 'm.megolm.v1.aes-sha2'});
     // }
+    if (opts && opts.callbackRoom) {
+      opts.callbackRoom(roomId);
+    }
     return roomId;
   }
 
@@ -1552,6 +1551,17 @@ export default class MatrixService {
         error: false,
         ...registerUser,
       };
+
+      let response = await client.login('m.login.password', {
+        user: username,
+        password: password,
+        device_id: registerUser.device_id,
+      });
+
+      console.log('RESPONE LOGIN', response);
+
+      data.accessToken = response.access_token;
+      data.access_token = response.access_token;
 
       return data;
     }
@@ -1600,45 +1610,163 @@ export default class MatrixService {
     }
   }
 
-  async sendVerification(userId: string) {
-    //Upon detecting unverified sessions, the target's user ID is called with this function
-    const req = await this.client.requestVerification(userId); //Send verification
-    // await req.waitFor(() => req.started || req.cancelled); //Wait until it is cancelled or accepted
-    if (req.cancelled) console.log('Verification cancelled by user.');
-    else await this.verificationHandler(req);
-  }
+  // async sendVerification(userId: string) {
+  //   //Upon detecting unverified sessions, the target's user ID is called with this function
+  //   const req = await this.client.requestVerification(userId); //Send verification
+  //   // await req.waitFor(() => req.started || req.cancelled); //Wait until it is cancelled or accepted
+  //   if (req.cancelled) console.log('Verification cancelled by user.');
+  //   else await this.verificationHandler(req);
+  // }
 
-  async verificationHandler(req: VerificationRequest) {
-    //This is also used upon receiving a verification request initiated by the other party
-    if (!req.verifier) {
-      if (!req.initiatedByMe) {
-        req.beginKeyVerification(verificationMethods.SAS);
-        await req.accept(); //Accept if not started by us
-      } else await req.waitFor(() => req.started || req.cancelled);
-      if (req.cancelled) {
-        await console.log('Verification cancelled.');
-        return;
+  // async verificationHandler(req: VerificationRequest) {
+  //   //This is also used upon receiving a verification request initiated by the other party
+  //   if (!req.verifier) {
+  //     if (!req.initiatedByMe) {
+  //       req.beginKeyVerification(verificationMethods.SAS);
+  //       await req.accept(); //Accept if not started by us
+  //     } else await req.waitFor(() => req.started || req.cancelled);
+  //     if (req.cancelled) {
+  //       await console.log('Verification cancelled.');
+  //       return;
+  //     }
+  //   }
+
+  //   req.verifier.once(SasEvent.ShowSas, async (e: ISasEvent) => {
+  //     //When it is time to show SAS
+  //     if (e.sas.decimal) console.log(`Decimal: ${e.sas.decimal.join(', ')}`);
+  //     if (e.sas.emoji) {
+  //       let emojis = [];
+  //       for (const emoji of e.sas.emoji)
+  //         emojis.push(`${emoji[0]} (${emoji[1]})`);
+  //       console.log(`Emojis are here: ${emojis.join(', ')}`);
+  //     }
+  //     console.log('Vv ');
+  //   });
+  //   try {
+  //     await req.verifier.verify(); //Start SAS verification, this is where error is thrown
+  //     console.log('Verification successful.');
+  //   } catch (e) {
+  //     console.log('Verification cancelled.');
+  //     console.log(e); //This is where the error gets printed
+  //     return;
+  //   }
+  // }
+
+  async custom_getSecretStorageKey({keys: keyInfos}) {
+    const keypharse = 'secure';
+
+    const client = await this.getClient();
+    if (!keypharse) return null;
+
+    let keyId = await client.getDefaultSecretStorageKeyId(); //MatrixClient
+
+    let keyInfo;
+    if (keyId) {
+      keyInfo = keyInfos[keyId];
+      if (!keyInfo) {
+        keyId = null;
       }
     }
 
-    req.verifier.once(SasEvent.ShowSas, async (e: ISasEvent) => {
-      //When it is time to show SAS
-      if (e.sas.decimal) console.log(`Decimal: ${e.sas.decimal.join(', ')}`);
-      if (e.sas.emoji) {
-        let emojis = [];
-        for (const emoji of e.sas.emoji)
-          emojis.push(`${emoji[0]} (${emoji[1]})`);
-        console.log(`Emojis are here: ${emojis.join(', ')}`);
+    if (!keyId) {
+      const keyInfoEntries = Object.entries(keyInfos);
+      if (keyInfoEntries.length > 1) {
+        throw new Error('Multiple storage key requests not implemented');
       }
-      console.log('Vv ');
-    });
+      [keyId, keyInfo] = keyInfoEntries[0];
+    }
+
+    if (!keyInfo) return null;
+
+    const derivedKey = await deriveKey(
+      keypharse,
+      keyInfo.passphrase.salt,
+      keyInfo.passphrase.iterations,
+    );
+
+    return [keyId, derivedKey];
+  }
+
+  async getBackup() {
+    const client = await this.getClient();
+
     try {
-      await req.verifier.verify(); //Start SAS verification, this is where error is thrown
-      console.log('Verification successful.');
+      let backup = await client.checkKeyBackup();
+      console.log('KEY BACKUP - checkKeyBackup', backup);
+      if (!backup.backupInfo) {
+        console.log('KEY BACKUP - createSecureBackup');
+        return this.createSecureBackup(client);
+        // throw new Error('Backup broken or not there');
+      }
+      console.log('KEY BACKUP - retrivedBackup');
+      // return this.createSecureBackup(client);
+      return backup;
     } catch (e) {
-      console.log('Verification cancelled.');
-      console.log(e); //This is where the error gets printed
-      return;
+      console.log('ERROR OR RETRIVEING BACKUP', e);
+    }
+  }
+
+  async restoreBackup(backup, passphrase) {
+    const client = await this.getClient();
+    // if (client.isValidRecoveryKey(passphrase)) {
+    //   alert('VALID KEY');
+    // }
+
+    if (
+      backup.backupInfo.auth_data?.private_key_salt &&
+      backup.backupInfo.auth_data?.private_key_iterations
+    ) {
+      const backupWithPassword = await client.restoreKeyBackupWithPassword(
+        passphrase,
+        undefined,
+        undefined,
+        backup.backupInfo,
+        {},
+      );
+      console.log(
+        'KEY BACKUP - restoreKeyBackupWithPassword',
+        backupWithPassword,
+      );
+    } else {
+      console.log('KEY BACKUP - enableKeybackup');
+      try {
+        await client.enableKeyBackup(backup.backupInfo);
+        if (!backup.trustInfo.usable) {
+          // this will also set trust usable and local trust true.
+          const recoverInfo = await client.restoreKeyBackupWithSecretStorage(
+            backup.backupInfo,
+            undefined,
+            undefined,
+          );
+          console.log('RECOVER INFO', recoverInfo);
+        }
+      } catch (e) {
+        console.error('Error in restore backup', e);
+      }
+    }
+  }
+
+  async createSecureBackup() {
+    const client = await this.getClient();
+    const keypharse = 'secure';
+    // const client = await this.getClient();
+    console.log('KEY BACKUP - keypharse', keypharse);
+    const prepareKeybackup = await client.prepareKeyBackupVersion(keypharse);
+    console.log('KEY BACKUP - prepareKeyBackupVersion', prepareKeybackup);
+    const newKeybackup = await client.createKeyBackupVersion(prepareKeybackup);
+    console.log('KEY BACKUP - createKeyBackupVersion', newKeybackup);
+    return newKeybackup;
+  }
+
+  async setAndEnableBackup() {
+    const client = await this.getClient();
+    const keypharse = 'secure';
+    if (!client) {
+      return alert('Client does not exist');
+    }
+    const backup = await this.getBackup();
+    if (backup && backup.backupInfo) {
+      this.restoreBackup(backup, keypharse);
     }
   }
 }

@@ -153,7 +153,7 @@ export default function Room({route, navigation}) {
   };
 
   const onPressRequestRoomKeys = () => {
-    ChatService.requestRoomKeys(roomId);
+    ChatService.requestRoomKeys(roomId, messages[messages.length - 1]);
   };
 
   return (
