@@ -15,6 +15,7 @@ import 'react-native-url-polyfill/auto';
 // polyfillGlobal('URL', () => require('whatwg-url').URL);
 
 global.fetch = fetch;
+global.Buffer = require('buffer').Buffer;
 // SharedArrayBuffer = ArrayBuffer;
 
 import {AppRegistry, LogBox} from 'react-native';
