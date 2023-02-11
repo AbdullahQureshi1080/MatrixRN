@@ -63,4 +63,4 @@ buck-out/
 .env
 
 #STATIC
-Api/static.js
+static.js
