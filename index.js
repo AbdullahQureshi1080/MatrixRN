@@ -16,6 +16,7 @@ import 'react-native-url-polyfill/auto';
 
 global.fetch = fetch;
 global.Buffer = require('buffer').Buffer;
+// global.util = require('util');
 // SharedArrayBuffer = ArrayBuffer;
 
 import {AppRegistry, LogBox} from 'react-native';

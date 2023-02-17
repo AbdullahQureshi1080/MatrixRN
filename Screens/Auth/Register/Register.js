@@ -28,6 +28,10 @@ import {loginUser, useUserContext} from '../../../Context/AppContext';
 
 import matrix from '../../../App';
 import MatrixService from '../../../Services/MatrixChatService';
+import {addUserToDatabase} from '../../../database/db';
+import {getDeviceID} from '../../../Utils/Device';
+import {decryptPassword, encryptPassword} from '../../../Utils/Helpers';
+import {color} from '../../../Utils/Color';
 
 function Register(props) {
   const {store, dispatch} = useUserContext();
@@ -51,6 +55,10 @@ function Register(props) {
     const result = await MatrixService.registerAccount(username, password);
     console.log('THE RESULT', result);
     if (result && !result.error) {
+      let alteredRes = {...result};
+      delete alteredRes.deviceId;
+      delete alteredRes.accessToken;
+      addUserToDatabase(alteredRes);
       storeUserMatrixData(result);
       loginUser(dispatch, result);
       return;
@@ -91,6 +99,14 @@ function Register(props) {
         size={'LARGE'}
         onPress={() => loginToHomeserver(user.username, user.password)}
         disabled={load.loading}
+      />
+      <Button
+        name={load.loading ? 'Loading' : 'Back to Login'}
+        type="PRIMARY"
+        size={'LARGE'}
+        onPress={() => navigation.navigate('Login')}
+        disabled={load.loading}
+        containerStyle={{backgroundColor: color.info}}
       />
     </Screen>
   );

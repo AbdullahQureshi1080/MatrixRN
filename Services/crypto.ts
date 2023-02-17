@@ -8,6 +8,7 @@ import {ISecretStorageKeyInfo} from 'matrix-js-sdk/lib/crypto/api';
 import {IVerificationChannel} from 'matrix-js-sdk/lib/crypto/verification/request/Channel';
 import {VerificationRequest} from 'matrix-js-sdk/lib/crypto/verification/request/VerificationRequest';
 import {deriveKey} from 'matrix-js-sdk/src/crypto/key_passphrase';
+import {Alert} from 'react-native';
 
 // send request to specific account
 let currentVerificationRequest: VerificationRequest | null = null;
@@ -105,6 +106,7 @@ export const GenerateClientOptsEncryption = (
 export const StartVerification = async (
   request: VerificationRequest,
 ): Promise<VerificationChallengeInterface> => {
+  const verificationMethod = 'm.sas.v1';
   console.log('In Verification method', request);
   console.log('Verifier', !request.verifier, !request.initiatedByMe);
   if (!request.verifier) {
@@ -114,9 +116,15 @@ export const StartVerification = async (
       if (request.cancelled) {
         throw new Error('verification aborted');
       }
+      console.log(
+        'DV ->beginKeyVerification:Methods',
+        request.methods,
+        request.methods[1],
+        request.targetDevice,
+      );
       // Auto chose method as the only one we both support.
       await request.beginKeyVerification(
-        request.methods[0],
+        request.methods.filter(mh => mh == verificationMethod)[0],
         request.targetDevice,
       );
     } else {
@@ -142,6 +150,7 @@ export const StartVerification = async (
   console.log('SAS Start', request);
 
   request.verifier.once('show_sas', async event => {
+    // Alert.alert('Hey VEriffier');
     console.log('Glob', event);
   });
 
@@ -150,7 +159,9 @@ export const StartVerification = async (
     request.verifier.once('show_sas', resolve),
   );
 
-  console.log('SAS Promise', sasEventPromise);
+  // const heylo = await sasEventPromise;
+  // console.log('SAS Promise', sasEventPromise,heylo);
+
   request.verifier.verify();
   const sasEvent = await sasEventPromise;
   console.log('SAS Event', sasEvent);

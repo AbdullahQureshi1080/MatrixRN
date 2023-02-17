@@ -26,10 +26,14 @@ import {Alert} from 'react-native';
 import {async} from 'rxjs';
 import {getUserMatrixData} from '../Utils/Storage';
 import {OlmDevice} from 'matrix-js-sdk/lib/crypto/OlmDevice';
-import {CryptoService, StartVerification} from './crypto';
+import {StartVerification} from './crypto';
 import {SasEvent} from 'matrix-js-sdk/lib/crypto/verification/SAS';
 import {accounts} from '../Api/static';
 import {deriveKey} from 'matrix-js-sdk/src/crypto/key_passphrase';
+import {getDeviceID} from '../Utils/Device';
+import {getAllUsersFromDatabase} from '../database/db';
+
+import {decryptPassword, encryptPassword} from '../Utils/Helpers';
 
 // import localStorage
 
@@ -71,9 +75,8 @@ const MATRIX_CLIENT_START_OPTIONS = {
 export default class MatrixService {
   /**@type {sdk.MatrixClient}  */
   client = null;
-  // host = Config.CHAT_SERVER_URL;
-  host = 'http://192.168.18.22:8008';
-  // host = 'https://2f0a-2407-d000-a-ee20-510a-99a9-8749-47e9.in.ngrok.io';
+  // host = 'http://192.168.18.22:8008';
+  host = 'https://c2ea-2407-d000-a-9ad7-59b7-4ff-ec75-2d2d.ap.ngrok.io';
   user = null;
   username = null;
   ready = null;
@@ -103,8 +106,48 @@ export default class MatrixService {
         searchParams.delete('_');
         return fetch(url, args);
       },
-      cryptoCallbacks: {getSecretStorageKey: this.custom_getSecretStorageKey},
+      cryptoCallbacks: {
+        getSecretStorageKey: async ({keyInfos}) => {
+          const keypharse = 'secure';
+
+          // const client = await this.getClient();
+          if (!keypharse) return null;
+
+          let keyId = await client.getDefaultSecretStorageKeyId(); //MatrixClient
+
+          let keyInfo;
+          if (keyId) {
+            keyInfo = keyInfos[keyId];
+            if (!keyInfo) {
+              keyId = null;
+            }
+          }
+
+          if (!keyId) {
+            const keyInfoEntries = Object.entries(keyInfos);
+            if (keyInfoEntries.length > 1) {
+              throw new Error('Multiple storage key requests not implemented');
+            }
+            [keyId, keyInfo] = keyInfoEntries[0];
+          }
+
+          if (!keyInfo) return null;
+
+          const derivedKey = await deriveKey(
+            keypharse,
+            keyInfo.passphrase.salt,
+            keyInfo.passphrase.iterations,
+          );
+
+          return [keyId, derivedKey];
+        },
+        // this.custom_getSecretStorageKey
+      },
     });
+
+    // client.cryptoCallbacks.getSecretStorageKey =
+    //   this.custom_getSecretStorageKey;
+
     this.deviceId = matrixCredentials.deviceId;
     this.userId = matrixCredentials.userId;
     this.accessToken = matrixCredentials.accessToken;
@@ -115,19 +158,30 @@ export default class MatrixService {
 
     await client.initCrypto();
 
+    // await client.downloadKeys([client.getUserId()]);
+
     // console.log('C LIENT IS CLIENT', client);
 
     // return !device.isUnverified();
 
     // .then(async () => {
     //   client.setGlobalErrorOnUnknownDevices(false);
-    await client.startClient({initialSyncLimit: 10}).then(() => {
-      if (client.isCryptoEnabled()) {
-        this.setAndEnableBackup();
-      } else {
-        alert('Error setting backup!');
-      }
-    });
+    await client.startClient({initialSyncLimit: 10});
+    // .then(() => {
+    const isCryptoEnabled = client.isCryptoEnabled();
+    // console.log('Encryption is enabled - service', isCryptoEnabled);
+    //   conosle.log('Crypto Layer', isCryptoEnabled);
+    // if (isCryptoEnabled) {
+    //   this.getCrossSigningInfo(matrixCredentials);
+    // } else {
+    //   conosle.log('Encryption layer still in process');
+    //   const isCryptoEnabledC = client.isCryptoEnabled();
+    //   if (isCryptoEnabledC) {
+    //     conosle.log('Encryption layer enabled', isCryptoEnabledC);
+    //     // await this.getCrossSigningInfo(matrixCredentials);
+    //   }
+    // }
+    // });
 
     // });
 
@@ -137,9 +191,16 @@ export default class MatrixService {
 
     // await client.startClient({initialSyncLimit: 10});
     clientSyncPromise = new Promise((resolve, reject) => {
+      const isCryptoEnabled = client.isCryptoEnabled();
+      const crossSigningInfo = () => {
+        this.getCrossSigningInfo(matrixCredentials);
+      };
       client.once('sync', function (state, prevState, res) {
         console.log('client sync state: ', state, prevState, res);
         if (state === 'PREPARED') {
+          if (isCryptoEnabled) {
+            crossSigningInfo();
+          }
           resolve();
         } else {
           reject(new Error(`State not prepared, instead: ${state}`));
@@ -189,18 +250,6 @@ export default class MatrixService {
     return this.client;
   }
 
-  async logOut() {
-    try {
-      const client = await this.getClient();
-
-      // await client.logout();
-      client.this.ready = false;
-      this.client = null;
-      this.accessToken = null;
-      this.userId = null;
-    } catch (error) {}
-  }
-
   async init(activeCredentials) {
     // Alert.alert('HI');
     let useCredentials = activeCredentials;
@@ -226,7 +275,11 @@ export default class MatrixService {
         // cryptoCallbacks: {getSecretStorageKey: this.custom_getSecretStorageKey},
         ...MATRIX_CLIENT_START_OPTIONS,
       });
+
       this.client = client;
+
+      // client.cryptoCallbacks.getSecretStorageKey =
+      //   this.custom_getSecretStorageKey();
       return Alert.alert('No Data');
     }
 
@@ -1087,6 +1140,7 @@ export default class MatrixService {
 
         // if (callback && event.verificationRequest) {
         callback(event.verificationRequest);
+
         // }
       }
 
@@ -1355,46 +1409,93 @@ export default class MatrixService {
           searchParams.delete('_');
           return fetch(url, args);
         },
-        cryptoCallbacks: {getSecretStorageKey: this.custom_getSecretStorageKey},
+        // cryptoCallbacks: {getSecretStorageKey: this.custom_getSecretStorageKey},
         ...MATRIX_CLIENT_START_OPTIONS,
       });
+
+      // client.cryptoCallbacks.getSecretStorageKey =
+      //   this.custom_getSecretStorageKey;
       console.log('Logging in to created client...', client);
 
-      const getDataFromStaticList = accounts.filter(
-        account => account.userId === `@${username}:localhost`,
+      const users = await getAllUsersFromDatabase();
+
+      const userDB = users.filter(u => u.userId == `@${username}:localhost`);
+
+      let account = null;
+      let newAccountLogin = null;
+
+      console.log('User FROM DB', userDB[0]);
+      if (!userDB.length) {
+        return Alert.alert('User does not exist, please register!');
+      }
+
+      account = {...userDB[0], id: userDB[0].id};
+
+      let devices = [...account.devices];
+
+      const checkIfNativeDeviceIdMatches = devices.filter(
+        dec => dec.nativeDeviceId == getDeviceID(),
       );
 
-      let account = getDataFromStaticList[0];
+      if (!checkIfNativeDeviceIdMatches.length) {
+        newAccountLogin = await client.login('m.login.password', {
+          user: username,
+          password: password,
+        });
 
-      // //  console.log('There was an error with login in');
-      // let response = await client.login('m.login.password', {
-      //   user: username,
-      //   password: password,
-      //   device_id: account?.deviceId,
-      // });
+        account.accessToken = newAccountLogin.access_token;
+        account.deviceId = newAccountLogin.device_id;
+        devices.push({
+          accessToken: newAccountLogin.access_token,
+          deviceId: newAccountLogin.device_id,
+          nativeDeviceId: getDeviceID(),
+        });
+      } else {
+        account.accessToken = account.devices.filter(
+          dec => dec.nativeDeviceId == getDeviceID(),
+        )[0].accessToken;
+        account.deviceId = account.devices.filter(
+          dec => dec.nativeDeviceId == getDeviceID(),
+        )[0].deviceId;
+      }
+
+      console.log('Devices', devices);
+
+      account.devices = devices;
+
+      // let data = {
+      //   userId: registerUser.user_id,
+      //   crypto: true,
+      //   error: false,
+      //   devices: [
+      //     {
+      //       accessToken: registerUser.access_token,
+      //       deviceId: registerUser.device_id,
+      //       nativeDeviceId: getDeviceID(),
+      //     },
+      //   ],
+      //   // accessToken: registerUser.access_token,
+      //   // deviceId: registerUser.device_id,
+      // };
+
+      // if (newAccountLogin) {
+      //   account.deviceId = newAccountLogin.device_id;
+      //   account.device_id = newAccountLogin.device_id;
+      //   account.access
+      // }
 
       console.log('Logging In', account);
-
-      let data = {
-        userId: account.user_id,
-        accessToken: account.access_token,
-        homeserver: this.host,
-        deviceId: account.device_id,
-        crypto: true,
-        error: true,
-        ...account,
-      };
 
       this.client = client;
       this.user = account;
       this.userId = account.user_id;
 
       if (account) {
-        this.init(data);
-        data.error = false;
+        this.init(account);
+        account.error = false;
       }
 
-      return data;
+      return account;
     } catch (e) {
       console.log('Error logging in:', e);
       const data = {};
@@ -1542,14 +1643,23 @@ export default class MatrixService {
         },
       );
 
+      const encryptedPassword = encryptPassword(password);
+      console.log('ENCRYPTED', encryptedPassword);
+      // const decryptedPassowrd = decryptPassword(encryptedPassword);
+      // console.log('DECRYPTED', decryptedPassowrd);
+
       let data = {
         userId: registerUser.user_id,
-        accessToken: registerUser.access_token,
-        homeserver: this.host,
-        deviceId: registerUser.device_id,
+        password: encryptedPassword,
         crypto: true,
         error: false,
-        ...registerUser,
+        devices: [
+          {
+            accessToken: registerUser.access_token,
+            deviceId: registerUser.device_id,
+            nativeDeviceId: getDeviceID(),
+          },
+        ],
       };
 
       let response = await client.login('m.login.password', {
@@ -1559,9 +1669,14 @@ export default class MatrixService {
       });
 
       console.log('RESPONE LOGIN', response);
+      data.devices.filter(
+        dec => dec.nativeDeviceId == getDeviceID(),
+      )[0].accessToken = response.access_token;
 
       data.accessToken = response.access_token;
-      data.access_token = response.access_token;
+      data.deviceId = registerUser.device_id;
+
+      this.init(data);
 
       return data;
     }
@@ -1584,14 +1699,18 @@ export default class MatrixService {
 
     if (!device.isUnverified()) {
       // Alert.alert('Comes here verification');
-      currentVerificationRequest = await client.requestVerification(
-        this.userId,
-      );
-      console.log('Current Verification Request', currentVerificationRequest);
+
+      if (!verificationRequest) {
+        currentVerificationRequest = await client.requestVerification(
+          this.userId,
+        );
+        console.log('Current Verification Request', currentVerificationRequest);
+      }
 
       // this.sendVerification(this.userId);
 
       if (verificationRequest) {
+        console.log('Incoming Verification Request', verificationRequest);
         currentVerificationRequest = verificationRequest;
       }
 
@@ -1618,39 +1737,39 @@ export default class MatrixService {
   //   else await this.verificationHandler(req);
   // }
 
-  // async verificationHandler(req: VerificationRequest) {
-  //   //This is also used upon receiving a verification request initiated by the other party
-  //   if (!req.verifier) {
-  //     if (!req.initiatedByMe) {
-  //       req.beginKeyVerification(verificationMethods.SAS);
-  //       await req.accept(); //Accept if not started by us
-  //     } else await req.waitFor(() => req.started || req.cancelled);
-  //     if (req.cancelled) {
-  //       await console.log('Verification cancelled.');
-  //       return;
-  //     }
-  //   }
+  async verificationHandler(req: VerificationRequest) {
+    //This is also used upon receiving a verification request initiated by the other party
+    if (!req.verifier) {
+      if (!req.initiatedByMe) {
+        req.beginKeyVerification(verificationMethods.SAS);
+        await req.accept(); //Accept if not started by us
+      } else await req.waitFor(() => req.started || req.cancelled);
+      if (req.cancelled) {
+        await console.log('Verification cancelled.');
+        return;
+      }
+    }
 
-  //   req.verifier.once(SasEvent.ShowSas, async (e: ISasEvent) => {
-  //     //When it is time to show SAS
-  //     if (e.sas.decimal) console.log(`Decimal: ${e.sas.decimal.join(', ')}`);
-  //     if (e.sas.emoji) {
-  //       let emojis = [];
-  //       for (const emoji of e.sas.emoji)
-  //         emojis.push(`${emoji[0]} (${emoji[1]})`);
-  //       console.log(`Emojis are here: ${emojis.join(', ')}`);
-  //     }
-  //     console.log('Vv ');
-  //   });
-  //   try {
-  //     await req.verifier.verify(); //Start SAS verification, this is where error is thrown
-  //     console.log('Verification successful.');
-  //   } catch (e) {
-  //     console.log('Verification cancelled.');
-  //     console.log(e); //This is where the error gets printed
-  //     return;
-  //   }
-  // }
+    req.verifier.once(SasEvent.ShowSas, async (e: ISasEvent) => {
+      //When it is time to show SAS
+      if (e.sas.decimal) console.log(`Decimal: ${e.sas.decimal.join(', ')}`);
+      if (e.sas.emoji) {
+        let emojis = [];
+        for (const emoji of e.sas.emoji)
+          emojis.push(`${emoji[0]} (${emoji[1]})`);
+        console.log(`Emojis are here: ${emojis.join(', ')}`);
+      }
+      console.log('Vv ');
+    });
+    try {
+      await req.verifier.verify(); //Start SAS verification, this is where error is thrown
+      console.log('Verification successful.');
+    } catch (e) {
+      console.log('Verification cancelled.');
+      console.log(e); //This is where the error gets printed
+      return;
+    }
+  }
 
   async custom_getSecretStorageKey({keys: keyInfos}) {
     const keypharse = 'secure';
@@ -1769,6 +1888,138 @@ export default class MatrixService {
       this.restoreBackup(backup, keypharse);
     }
   }
+
+  async getCrossSigningInfo(matrixCredentials) {
+    const client = await this.getClient();
+    // const userCrossSigning = client.getStoredCrossSigningForUser();
+    // console.log('Cross Signing', userCrossSigning);
+    let isCrossSigningReady = await client.isCrossSigningReady();
+    // let isCrossSigningVerified = await client.crypto.is
+    let crossSigningID = client.getCrossSigningId();
+    console.log('isCrossSigningReady', isCrossSigningReady, crossSigningID);
+    // const crossSignKeys = clien
+    await client.downloadKeys([client.getUserId()]);
+    const sessionId = client.getSessionId();
+    if (isCrossSigningReady) {
+      const checkCrossSigning = await client.checkOwnCrossSigningTrust();
+      console.log('checkCrossSigning', checkCrossSigning);
+      const userHasCrossSigningKeys = await client.userHasCrossSigningKeys();
+      console.log('userHasCrossSigningKeys', userHasCrossSigningKeys);
+      const sync = client.isInitialSyncComplete();
+      console.log('sync', sync);
+      await client.downloadKeys([client.getUserId()]);
+      console.log('Setting Up Backup');
+      this.setAndEnableBackup();
+      return;
+    } else {
+      const userId = this.userId;
+      const bootstrapCrossSigning = await client.bootstrapCrossSigning({
+        setupNewCrossSigning: true,
+        authUploadDeviceSigningKeys: async makeRequest => {
+          // Complying with the User-Interactive Authentication API of uploading device signing keys,
+          // we first make a request without the auth parameter and retrieve the session id (as well as authentication flow data).
+          // We use this session id to authenticate the API request the second time.
+          makeRequest().then(
+            () => {
+              throw new Error(
+                'Should never have arrived here with empty auth.',
+              );
+            },
+            async reason => {
+              let response_data = reason.data;
+              let auth_data = {
+                session: response_data.session,
+                type: 'm.login.password',
+                user: userId,
+                identifier: {
+                  type: 'm.id.user',
+                  user: userId,
+                },
+                password: decryptPassword(matrixCredentials.password),
+              };
+              makeRequest(auth_data).then(
+                () => {
+                  this.setupSecretStorage();
+                },
+                err => {
+                  throw new Error(
+                    'Failed to upload device signing keys with error: ' + err,
+                  );
+                },
+              );
+            },
+          );
+        },
+      });
+      console.log('bootstrapCrossSigning', bootstrapCrossSigning);
+    }
+  }
+
+  async setupSecretStorage() {
+    const client = await this.getClient();
+    const keypharse = 'secure';
+    const recoveryKey = client.createRecoveryKeyFromPassphrase(keypharse);
+
+    // Set callback that is required during the bootstrap process.
+    client.cryptoCallbacks.getCrossSigningKey = async () => recoveryKey;
+    // Setting up the secret storage:
+    // Signs the SSSS default key with master cross-signing key and device (for backwards compatibility of device-to-device verification).
+    // This step also uploads cross-signing keys to account_data.
+    await client.bootstrapSecretStorage({
+      createSecretStorageKey: async () => recoveryKey,
+      setupNewKeyBackup: true,
+      setupNewSecretStorage: true,
+    });
+    recoveryKey.then(val => {
+      console.scriptout(val.encodedPrivateKey);
+    });
+    // Device session no longer needed - logout.
+    // await client.logout();
+  }
+
+  async stopClientAndDeleteStores() {
+    // try {
+    console.log('STOP THIS');
+    // alert("Hdhghs")
+    // const client = await this.getClient();
+    // console.log('STOP THIS', client);
+    // // client.stopClient();
+    // // const clearStores = await client.clearStores();
+    // // console.log('Stores Cleared', clearStores);
+    // const deletingStore = await client.store.deleteAllData();
+    // const deletetingCryptoStore =
+    //   await client.crypto.cryptoStore.deleteAllData();
+    // console.log('DELETING STORES', deletingStore, deletetingCryptoStore);
+    // client.this.ready = false;
+    // this.client = null;
+    // this.accessToken = null;
+    // this.userId = null;
+    // return clearStores;
+    // } catch (error) {
+    // console.log('Hey Hey', e);
+    // }
+  }
+
+  async logOut() {
+    try {
+      const client = await this.getClient();
+      // client.stopClient();
+      // const clearStores = await client.clearStores();
+      // console.log('Stores Cleared', clearStores);
+      const deletingStore = await client.store.deleteAllData();
+      const deletetingCryptoStore =
+        await client.crypto.cryptoStore.deleteAllData();
+      console.log('DELETING STORES', deletingStore, deletetingCryptoStore);
+      client.this.ready = false;
+      this.client = null;
+      this.accessToken = null;
+      this.userId = null;
+      return clearStores;
+    } catch (error) {
+      console.log('Hey Hey', e);
+    }
+  }
 }
+
 const ChatService = new MatrixService();
 module.exports = ChatService;

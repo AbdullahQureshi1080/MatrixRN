@@ -30,6 +30,7 @@ const styles = isDarkMode =>
       paddingHorizontal: 5,
       height: 40,
       fontSize: 16,
+      color: 'green',
     },
     SECTION_CONTAINER: {
       marginTop: 32,

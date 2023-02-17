@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "705402635950",
+    "project_id": "matrixrn",
+    "storage_bucket": "matrixrn.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:705402635950:android:a18a358db0b7ba77e98f3f",
+        "android_client_info": {
+          "package_name": "com.matrixrn"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "705402635950-5lhi7ijh0l4j3380o8697krurbfid0pu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.matrixrn",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "705402635950-pidgcm8nqj06c647ua5kenno0kigmpo3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSyMahV2loiJ9FG5UEP9Dd11P9gEM1RxU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "705402635950-pidgcm8nqj06c647ua5kenno0kigmpo3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

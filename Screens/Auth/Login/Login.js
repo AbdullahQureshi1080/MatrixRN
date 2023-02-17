@@ -23,12 +23,13 @@ import {storeUserMatrixData} from '../../../Utils/Storage';
 
 import {loginUser, useUserContext} from '../../../Context/AppContext';
 
-
 // import matrix from '../../../App';
 // import MatrixService from '../../../Services/MatrixChatService';
 
 import matrix from '../../../App';
 import MatrixService from '../../../Services/MatrixChatService';
+import {updateUserInDatabase} from '../../../database/db';
+import {color} from '../../../Utils/Color';
 
 // import {
 //   IsLoggedIn,
@@ -57,17 +58,6 @@ function Login(props) {
     if (!username || !password) {
       return Alert.alert('Please enter username & password');
     }
-
-    // AuthLogin(username, password).then(async () => {
-    //   await StartClient();
-    //   await PrepareSync();
-    // });
-
-    // let newMatrix = new MatrixService();
-    // if (!matrix) {
-    //   newMatrix = new MatrixService();
-    // }
-    // loadDispatch({type: 'SET_LOADING', payload: true});
     const result = await MatrixService.loginWithPassword(
       username,
       password,
@@ -76,28 +66,14 @@ function Login(props) {
     );
     console.log('THE RESULT', result);
     if (result && !result.error) {
-      // storeUserMatrixData(result);
+      let alteredRes = {...result};
+      delete alteredRes.accessToken;
+      delete alteredRes.deviceId;
+      updateUserInDatabase(alteredRes);
+      storeUserMatrixData(result);
       loginUser(dispatch, result);
       return;
     }
-    // if (result.error) {
-    //   //   dispatch({type: 'SET_LOADING', payload: result.error});
-    //   console.log('Error logging in: ', result);
-
-    //   const tryingAgain = await MatrixService.loginWithPassword(
-    //     username,
-    //     password,
-    //     Config.CHAT_SERVER_URL,
-    //     true, // enable crypto? default false
-    //   );
-    //   console.log('THE RESULT', tryingAgain);
-    //   if (result && !result.error) {
-    //     // storeUserMatrixData(tryingAgain);
-    //     loginUser(dispatch, result);
-    //     // return loadDispatch({type: 'SET_LOADING', payload: false});
-    //   }
-    //   //   setError(result.message);
-    // }
   };
 
   return (
@@ -117,16 +93,6 @@ function Login(props) {
             name="username"
           />
         </View>
-        {/* <View style={styles.INPUT_BOX}>
-            <Text style={styles.LABEL}>Email</Text>
-            <TextInput
-              style={styles.INPUT}
-              placeholder="Email"
-              onChangeText={text => {
-                dispatch({type: 'SET_EMAIL', payload: text});
-              }}
-            />
-          </View> */}
         <View style={styles.INPUT_BOX}>
           <Text style={styles.LABEL}>Password</Text>
           <TextInput
@@ -151,6 +117,7 @@ function Login(props) {
         type="PRIMARY"
         size={'LARGE'}
         onPress={() => navigation.navigate('Register')}
+        containerStyle={{backgroundColor: color.info}}
         // disabled={load.loading}
       />
     </Screen>

@@ -13,7 +13,11 @@ import Screen from '../../Components/Screen/Screen';
 import newStyles from './RoomsStyles';
 
 import Config from 'react-native-config';
-import {getUserMatrixData, removeUserMatrixData} from '../../Utils/Storage';
+import {
+  getUserMatrixData,
+  removeUserMatrixData,
+  storeUserMatrixData,
+} from '../../Utils/Storage';
 import Button from '../../Components/Button/Button';
 import {logoutUser, useUserContext} from '../../Context/AppContext';
 import ChatService from '../../Services/MatrixChatService';
@@ -22,6 +26,13 @@ import CreateRoom from '../CreateRoom/CreateRoom';
 
 import '../../Services/poly';
 import {IndexedDBCryptoStore, IndexedDBStore} from 'matrix-js-sdk';
+import {color} from '../../Utils/Color';
+import {
+  getAllUsersFromDatabase,
+  getUserFromDatabase,
+  updateUserInDatabase,
+} from '../../database/db';
+import {getDeviceID} from '../../Utils/Device';
 
 if (!Promise.allSettled) {
   Promise.allSettled = promises =>
@@ -57,7 +68,22 @@ export default function Rooms({navigation}) {
 
   // const [emojies, setEmojies] = useState([]);
 
+  const getUsers = async () => {
+    const users = await getAllUsersFromDatabase();
+    const currentUser = await getUserMatrixData();
+    console.log('getUsers:users:currentUsers', users, currentUser);
+    const user = users.filter(us => us.userId == currentUser.userId)[0];
+    console.log('getUsers:User', user);
+    if (user && !currentUser.id) {
+      console.log('User updated!');
+      storeUserMatrixData(user);
+      return updateUserInDatabase(user);
+    }
+    console.log('User already updated!');
+  };
+
   useEffect(() => {
+    getUsers();
     console.log('THE MATRIX SERVICE CLIENT: ROOMS', ChatService);
     ChatService.onGlobalListener(setIncommingVerificationRequest);
 
@@ -65,6 +91,15 @@ export default function Rooms({navigation}) {
     getRooms();
     // }
   }, []);
+
+  // useEffect(() => {
+  //   const cryptoEnabled = ChatService?.client?.isCryptoEnabled();
+  //   if (cryptoEnabled) {
+  //     console.log('Encryption is enabled', cryptoEnabled);
+  //     // alert('Encryption is enabled', cryptoEnabled);
+  //     ChatService.getCrossSigningInfo();
+  //   }
+  // }, [ChatService?.client?.isCryptoEnabled()]);
 
   const getRooms = async () => {
     let rooms = await ChatService.getAllRooms(null);
@@ -94,35 +129,25 @@ export default function Rooms({navigation}) {
     navigation.navigate('Room', {room: item});
   };
 
-  const onPressLogout = () => {
-    removeUserMatrixData();
-    // console.log(
-    //   'DB NAME',
-    //   window.indexedDB.databases().then(r => {
-    //     console.log('r - ', r);
-    //   }),
-    // );
-    // window.indexedD
+  const onPressLogout = async () => {
+    // const backup = await ChatService.setAndEnableBackup();
+    // if (backup) {
     window.indexedDB
       .databases()
       .then(r => {
         for (var i = 0; i < r.length; i++) indexedDB.deleteDatabase(r[i].name);
       })
       .then(() => {
+        removeUserMatrixData();
+        logoutUser(dispatch);
         alert('All data cleared.');
       });
-    // // console.log('DATEBASES-IDBFactory', window.indexedDB.prototype.databases());
-    // console.log('WINDOW', window);
-
-    // console.log('DATEBASES-indexedDB', window.indexedDB.databases());
-
-    // window.IDBFactory.then(r => {
-    //   for (var i = 0; i < r.length; i++) IDBDatabase.deleteDatabase(r[i].name);
-    // }).then(() => {
-    //   alert('All data cleared.');
-    // });
-
-    logoutUser(dispatch);
+    // }
+    // const storeCleared = await
+    // ChatService.stopClientAndDeleteStores();
+    // ChatService.getAllRooms(null);
+    // console.log('STORE CLEARED', storeCleared);
+    // if (storeCleared) {
   };
 
   const renderItem = ({item, inde}) => {
@@ -183,7 +208,58 @@ export default function Rooms({navigation}) {
           alignItems: 'center',
           alignSelf: 'center',
         }}
+        labelStyle={{color: color.textLight}}
       />
+      {/* <Button
+        name={'SetupBackup'}
+        type="PRIMARY"
+        size={'LARGE'}
+        onPress={() => {
+          ChatService.setAndEnableBackup();
+        }}
+        style={{
+          borderRadius: 8,
+          height: 40,
+          justifyContent: 'center',
+          alignItems: 'center',
+          alignSelf: 'center',
+        }}
+        labelStyle={{color: color.textLight}}
+      /> */}
+      {/* <Button
+        name={'See Cross Signing Info'}
+        type="PRIMARY"
+        size={'LARGE'}
+        onPress={() => {
+          ChatService.getCrossSigningInfo();
+        }}
+        style={{
+          borderRadius: 8,
+          height: 40,
+          justifyContent: 'center',
+          alignItems: 'center',
+          alignSelf: 'center',
+        }}
+        labelStyle={{color: color.textLight}}
+      /> */}
+      {/* <Button
+        name={'Get Data from Database'}
+        type="PRIMARY"
+        size={'LARGE'}
+        onPress={() => {
+          getAllUsersFromDatabase();
+          getUserFromDatabase('jxKHqMHHXE6589cYr5Ze');
+          getDeviceID();
+        }}
+        style={{
+          borderRadius: 8,
+          height: 40,
+          justifyContent: 'center',
+          alignItems: 'center',
+          alignSelf: 'center',
+        }}
+        labelStyle={{color: color.textLight}}
+      /> */}
 
       <FlatList
         data={rooms}
@@ -208,6 +284,13 @@ export default function Rooms({navigation}) {
           callbackRoom={callbackRoom}
         />
       )}
+
+      {/* <Button
+        name={'Press Me'}
+        type="PRIMARY"
+        size={'LARGE'}
+        onPress={() => onPressLogout()}
+      /> */}
 
       <Button
         name={'Logout'}
