@@ -1,5 +1,6 @@
 import {StyleSheet, useColorScheme} from 'react-native';
 import {Colors} from 'react-native/Libraries/NewAppScreen';
+import {color} from '../../../Utils/Color';
 
 // console.log('THE COLORS', Colors);
 
@@ -30,7 +31,7 @@ const styles = isDarkMode =>
       paddingHorizontal: 5,
       height: 40,
       fontSize: 16,
-      color: 'green',
+      color: color.text,
     },
     SECTION_CONTAINER: {
       marginTop: 32,

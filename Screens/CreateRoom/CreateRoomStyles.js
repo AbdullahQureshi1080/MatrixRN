@@ -31,10 +31,28 @@ const styles = isDarkMode =>
       paddingHorizontal: 5,
       height: 40,
       fontSize: 16,
+      color: color.text,
     },
     SECTION_CONTAINER: {
       marginTop: 32,
       paddingHorizontal: 24,
+    },
+
+    SECTION_CONTAINER_LIST: {
+      marginTop: 32,
+      marginHorizontal: 24,
+      borderRadius: 8,
+      height: 200,
+      backgroundColor: color.grey,
+      // paddingHorizontal: 20,
+      // paddingVertical: 20,
+    },
+    SECTION_CONTAINER_SELECTED_LIST: {
+      marginTop: 32,
+      marginHorizontal: 24,
+      borderRadius: 8,
+      height: 200,
+      backgroundColor: color.primary,
     },
     SECTION_TITLE: {
       fontSize: 24,
@@ -56,6 +74,17 @@ const styles = isDarkMode =>
       fontSize: 14,
       fontWeight: '400',
       color: color.icon,
+    },
+    LIST_USER: {
+      flexDirection: 'row',
+      backgroundColor: color.chat,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderTopEndRadius: 8,
+      borderTopStartRadius: 8,
+      alignItems: 'center',
+      marginVertical: 2,
+      justifyContent: 'space-between',
     },
   });
 

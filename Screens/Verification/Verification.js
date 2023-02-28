@@ -112,7 +112,7 @@ function VerificationModal({
             type="PRIMARY"
             size={'MEDIUM'}
             onPress={() => {
-              verification.handleResult(true);
+              verification?.handleResult(true);
               setIsVisible(false);
               Alert.alert('Verification Complete');
             }}

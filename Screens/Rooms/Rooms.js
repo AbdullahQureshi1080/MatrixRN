@@ -58,6 +58,12 @@ export default function Rooms({navigation}) {
 
   const [rooms, setRooms] = useState([]);
 
+  const [user, setUser] = useState(null);
+
+  const [loading, setLoading] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [fetchingRooms, setFetchingRooms] = useState(false);
+
   const [isVisible, setIsVisible] = useState(false);
   const [isRoomVisible, setIsRoomVisible] = useState(false);
 
@@ -79,10 +85,12 @@ export default function Rooms({navigation}) {
       storeUserMatrixData(user);
       return updateUserInDatabase(user);
     }
+    setUser(user);
     console.log('User already updated!');
   };
 
   useEffect(() => {
+    setLoading(true);
     getUsers();
     console.log('THE MATRIX SERVICE CLIENT: ROOMS', ChatService);
     ChatService.onGlobalListener(setIncommingVerificationRequest);
@@ -102,14 +110,25 @@ export default function Rooms({navigation}) {
   // }, [ChatService?.client?.isCryptoEnabled()]);
 
   const getRooms = async () => {
+    setFetchingRooms(true);
+    setLoading(false);
     let rooms = await ChatService.getAllRooms(null);
     console.log('THE ROOMS', rooms);
     if (rooms) {
-      return setRooms(rooms);
+      // setLoading(false);
+      // setFetchingRooms(false);
+      setRooms(rooms);
     }
+    // setRooms([]);
+    setLoading(false);
+    setFetchingRooms(false);
   };
 
   useEffect(() => {
+    // setTimeout(() => {
+    // setLoading(false);
+    // setFetchingRooms(false);
+    // }, 10);
     if (rooms.length) {
       console.log('THE ROOMS: ROOMS', rooms);
       // ChatService.getBackup()
@@ -122,6 +141,12 @@ export default function Rooms({navigation}) {
     }
   }, [incomingVerificationRequest]);
 
+  useEffect(() => {
+    if (!isVisible) {
+      setIncommingVerificationRequest(null);
+    }
+  }, [isVisible]);
+
   const isDarkMode = useColorScheme() === 'dark';
   const styles = newStyles(isDarkMode);
 
@@ -130,24 +155,35 @@ export default function Rooms({navigation}) {
   };
 
   const onPressLogout = async () => {
-    // const backup = await ChatService.setAndEnableBackup();
-    // if (backup) {
-    window.indexedDB
-      .databases()
-      .then(r => {
-        for (var i = 0; i < r.length; i++) indexedDB.deleteDatabase(r[i].name);
-      })
-      .then(() => {
-        removeUserMatrixData();
-        logoutUser(dispatch);
-        alert('All data cleared.');
-      });
+    // try {
+    // setLoading(true);
+    // setLoggingOut(true);
+    const logout = await ChatService.stopClientAndDeleteStores();
+    // if (typeof logout == 'object') {
+    // setLoading(false);
+    removeUserMatrixData();
+    logoutUser(dispatch);
+    alert('All data cleared.');
+
+    // if (ChatService.client) {
+    //   console.log('Client Exists', ChatService.client);
+
     // }
-    // const storeCleared = await
-    // ChatService.stopClientAndDeleteStores();
-    // ChatService.getAllRooms(null);
-    // console.log('STORE CLEARED', storeCleared);
-    // if (storeCleared) {
+    // }
+    console.log('COmes Here', logout);
+    // } catch (error) {
+    //   console.log('ERROR LOGGING OUT', error);
+    //   setLoading(false);
+    //   setLoggingOut(false);
+    // }
+
+    // indexedDB
+    //   .databases()
+    //   .then(r => {
+    //     for (var i = 0; i < r.length; i++) indexedDB.deleteDatabase(r[i].name);
+    //   })
+    //   .then(() => {
+    //   });
   };
 
   const renderItem = ({item, inde}) => {
@@ -177,61 +213,60 @@ export default function Rooms({navigation}) {
           justifyContent: 'space-between',
           marginHorizontal: 20,
         }}>
-        <Text style={styles.SCREEN_TITLE}>Rooms</Text>
+        <Text style={styles.SCREEN_TITLE}>MATRIX CHAT</Text>
 
-        <TouchableOpacity onPress={getRooms}>
+        <TouchableOpacity
+          onPress={() => {
+            getRooms();
+          }}>
           <Text style={styles.ROOM_MESSAGE}>Refresh</Text>
         </TouchableOpacity>
       </View>
 
-      <Button
-        name={'Create Room'}
-        type="PRIMARY"
-        size={'LARGE'}
-        onPress={() => setIsRoomVisible(true)}
-      />
+      {loading ? (
+        <View style={{justifyContent: 'center', alignItems: 'center'}}>
+          <ActivityIndicator size={'large'} color={color.textLight} />
+          {loggingOut ? (
+            <Text style={styles.LABEL}>Logging out......</Text>
+          ) : null}
+          {fetchingRooms ? (
+            <Text style={styles.LABEL}>Getting Rooms.....</Text>
+          ) : null}
+        </View>
+      ) : (
+        <>
+          <Button
+            name={'Create Room'}
+            type="PRIMARY"
+            size={'LARGE'}
+            onPress={() => setIsRoomVisible(true)}
+          />
 
-      <Button
-        name={'Start Verification'}
+          <Button
+            name={'Start Verification'}
+            type="PRIMARY"
+            size={'LARGE'}
+            onPress={() => {
+              if (!rooms) {
+                return alert('Syncing in progress, please wait');
+              }
+              setIsVisible(true);
+            }}
+            style={{
+              borderRadius: 8,
+              height: 40,
+              justifyContent: 'center',
+              alignItems: 'center',
+              alignSelf: 'center',
+            }}
+            labelStyle={{color: color.textLight}}
+          />
+          {/* <Button
+        name={'Save Backup'}
         type="PRIMARY"
         size={'LARGE'}
         onPress={() => {
-          if (!rooms) {
-            return alert('Syncing in progress, please wait');
-          }
-          setIsVisible(true);
-        }}
-        style={{
-          borderRadius: 8,
-          height: 40,
-          justifyContent: 'center',
-          alignItems: 'center',
-          alignSelf: 'center',
-        }}
-        labelStyle={{color: color.textLight}}
-      />
-      {/* <Button
-        name={'SetupBackup'}
-        type="PRIMARY"
-        size={'LARGE'}
-        onPress={() => {
-          ChatService.setAndEnableBackup();
-        }}
-        style={{
-          borderRadius: 8,
-          height: 40,
-          justifyContent: 'center',
-          alignItems: 'center',
-          alignSelf: 'center',
-        }}
-        labelStyle={{color: color.textLight}}
-      /> */}
-      {/* <Button
-        name={'See Cross Signing Info'}
-        type="PRIMARY"
-        size={'LARGE'}
-        onPress={() => {
-          ChatService.getCrossSigningInfo();
+          // ChatService.sendBackupSever();
         }}
         style={{
           borderRadius: 8,
@@ -242,30 +277,57 @@ export default function Rooms({navigation}) {
         }}
         labelStyle={{color: color.textLight}}
       /> */}
-      {/* <Button
-        name={'Get Data from Database'}
-        type="PRIMARY"
-        size={'LARGE'}
-        onPress={() => {
-          getAllUsersFromDatabase();
-          getUserFromDatabase('jxKHqMHHXE6589cYr5Ze');
-          getDeviceID();
-        }}
-        style={{
-          borderRadius: 8,
-          height: 40,
-          justifyContent: 'center',
-          alignItems: 'center',
-          alignSelf: 'center',
-        }}
-        labelStyle={{color: color.textLight}}
-      /> */}
+          {/* <Button
+            name={'See Cross Signing Info'}
+            type="PRIMARY"
+            size={'LARGE'}
+            onPress={() => {
+              if (user) {
+                ChatService.getCrossSigningInfo(user);
+              }
+            }}
+            style={{
+              borderRadius: 8,
+              height: 40,
+              justifyContent: 'center',
+              alignItems: 'center',
+              alignSelf: 'center',
+            }}
+            labelStyle={{color: color.textLight}}
+          />
+          <Button
+            name={'SAVE BACKUP'}
+            type="PRIMARY"
+            size={'LARGE'}
+            onPress={() => {
+              ChatService.setAndEnableBackup(user);
+            }}
+            style={{
+              borderRadius: 8,
+              height: 40,
+              justifyContent: 'center',
+              alignItems: 'center',
+              alignSelf: 'center',
+            }}
+            labelStyle={{color: color.textLight}}
+          /> */}
 
-      <FlatList
-        data={rooms}
-        renderItem={renderItem}
-        keyExtractor={(item, index) => index.toString()}
-      />
+          <FlatList
+            data={rooms}
+            renderItem={renderItem}
+            keyExtractor={(item, index) => index.toString()}
+          />
+        </>
+      )}
+
+      {loggingOut ? null : (
+        <Button
+          name={'Logout'}
+          type="PRIMARY"
+          size={'LARGE'}
+          onPress={() => onPressLogout()}
+        />
+      )}
 
       {isVisible && (
         <VerificationModal
@@ -284,20 +346,6 @@ export default function Rooms({navigation}) {
           callbackRoom={callbackRoom}
         />
       )}
-
-      {/* <Button
-        name={'Press Me'}
-        type="PRIMARY"
-        size={'LARGE'}
-        onPress={() => onPressLogout()}
-      /> */}
-
-      <Button
-        name={'Logout'}
-        type="PRIMARY"
-        size={'LARGE'}
-        onPress={() => onPressLogout()}
-      />
     </Screen>
   );
 }
