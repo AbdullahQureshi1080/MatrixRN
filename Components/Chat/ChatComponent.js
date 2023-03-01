@@ -22,6 +22,13 @@ import {Image} from 'react-native';
 // import '../../Services/poly';
 
 import styles from './ChatComponentStyles';
+import CameraModal from '../Camera/Camera';
+import Button from '../Button/Button';
+import {decryptFile} from '../../Utils/decrypt';
+
+import MatrixService from '../../Services/MatrixChatService';
+import {decryptAttachment, encodeBase64} from 'matrix-encrypt-attachment';
+import {getBlobSafeMimeType} from '../../Utils/Helpers';
 
 const ChatComponent = props => {
   // Data States
@@ -39,6 +46,13 @@ const ChatComponent = props => {
   const [heightInput, setHeightInput] = useState(38);
   const [viewHeight, setViewHeight] = useState(38);
   const [heightControl, setHeightControl] = useState(false);
+
+  const [isVisible, setIsVisible] = useState(false);
+  const [isCameraVisible, setIsCameraVisible] = useState(false);
+
+  // Image
+  const [imageUpload, setImageUpload] = useState('');
+  const [imageData, setImageData] = useState(null);
 
   useEffect(() => {
     console.log('The View Height Increase', viewHeight);
@@ -207,24 +221,24 @@ const ChatComponent = props => {
   }, [messageList]);
 
   const handleTextSend = () => {
-    // if (text == '' && imageUpload == '') {
-    //   if (Platform.OS === 'android') {
-    //     return ToastAndroid.show(
-    //       'Cannot send empty message !',
-    //       ToastAndroid.SHORT,
-    //     );
-    //     // return Alert.alert('Cannot send empty message !');
-    //   } else {
-    //     return Alert.alert('Cannot send empty message !');
-    //   }
-    // }
+    if (text == '' && imageUpload == '') {
+      if (Platform.OS === 'android') {
+        return ToastAndroid.show(
+          'Cannot send empty message !',
+          ToastAndroid.SHORT,
+        );
+        // return Alert.alert('Cannot send empty message !');
+      } else {
+        return Alert.alert('Cannot send empty message !');
+      }
+    }
     if (!text) {
       return Alert.alert('Cannot send empty message !');
     }
-    // if (imageUpload) {
-    //   handleImageMessage();
-    //   return;
-    // }
+    if (imageUpload) {
+      handleImageMessage();
+      return;
+    }
     let now = new Date();
     let message = new Message();
     message.message = text;
@@ -262,9 +276,15 @@ const ChatComponent = props => {
     message.messageType = MessageType.IMAGE;
     console.log('Message', message);
     let messageList_ = [...messageList, message];
-
+    // TODO: ENCRYPTED ATTACHMENTS: Make encrypted attachments performat and easy to handle
+    // // ---- For Encrypted Attachments/ since the event is encrypted there is no need to encrypt the attachment as of yet
+    // message.key = res.key;
+    // message.iv = res.iv;
+    // message.hashes = res.hashes;
+    // message.v = res.v;
     setMessageList(messageList_);
 
+    console.log('HANDLEIMAGEMESSAGE -> message', message);
     if (onImageMessageSend) {
       onImageMessageSend(message);
     }
@@ -391,7 +411,9 @@ const ChatComponent = props => {
           <View>
             <Image
               source={{
-                uri: msg.url,
+                // TODO: ENCRYPTED ATTACHMENTS: replace url with a local uri
+                uri: `${msg.url}`,
+                // uri: `data:image/png;base64,${msg.url}`,
               }}
               style={styles.messageImage}
             />
@@ -473,7 +495,14 @@ const ChatComponent = props => {
             Messages are end-to-end encrypted
           </Text>
         </View>
-
+        <View>
+          <Button
+            name={'Send Image'}
+            type="PRIMARY"
+            size={'LARGE'}
+            onPress={() => setIsCameraVisible(true)}
+          />
+        </View>
         {render &&
           messageList.map((message, i) => (
             <View key={i}>{formatMessage(message)}</View>
@@ -552,6 +581,19 @@ const ChatComponent = props => {
           </View>
         </View>
       </TouchableWithoutFeedback>
+      <CameraModal
+        title={'Choose or upload'}
+        subtitle={'Take a picture or upload image from gallery.'}
+        isVisible={isCameraVisible}
+        setIsVisible={visible => setIsCameraVisible(visible)}
+        imageUri={imageUpload}
+        onChangeImage={(image, data) => {
+          setImageUpload(image);
+          setImageData(data);
+          setIsCameraVisible(false);
+        }}
+        showPreview={true}
+      />
     </KeyboardAvoidingView>
   );
 };

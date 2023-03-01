@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import React, {useEffect, useState, useRef} from 'react';
 
+import RNFS from 'react-native-fs';
+
 import Screen from '../../Components/Screen/Screen';
 import newStyles from './RoomStyles';
 
@@ -19,6 +21,13 @@ import MatrixService from '../../Services/MatrixChatService';
 import ChatComponent from '../../Components/Chat/ChatComponent';
 
 import '../../Services/poly';
+import {
+  decodeBase64,
+  decryptAttachment,
+  encryptAttachment,
+} from 'matrix-encrypt-attachment';
+import {decode} from 'js-base64';
+import {MessageType} from '../../Components/Chat/models/message.type';
 
 if (!Promise.allSettled) {
   Promise.allSettled = promises =>
@@ -115,11 +124,26 @@ export default function Room({route, navigation}) {
 
     ChatService.onMessageReceive(roomId, (msg, event, userId) => {
       console.log('THE NEW MESSAGE', msg);
+
+      // if (msg && msg.messageType == MessageType.IMAGE) {
+      //   const decryptedFile = decryptAttachment(res.data, {
+      //     iv: res.iv,
+      //     key: res.key,
+      //     hashes: res.hashes,
+      //     v: res.v,
+      //     // url: message.url,
+      //   });
+
+      //   const encodedBase64 = encodeBase64(decryptedFile);
+      //   // const blob = new Blob([decryptedFile], {type: getBlobSafeMimeType()});
+      //   console.log('Decrypted File', encodedBase64);
+      // }
       let list = [...messageRef.current];
 
       if (msg) {
         list = [...messageRef.current, msg];
       }
+
       console.log('EVENT > SENDER ID > USER ID', event?.sender?.userId);
       console.log('USER ID', userId);
 
@@ -143,13 +167,34 @@ export default function Room({route, navigation}) {
   };
 
   const uploadImage = async image => {
+    // TODO: ENCRYPTED ATTACHMENTS: Make encrypted attachments performat and easy to handle
+    // console.log('Image IS', image);
+    // var base64 = await RNFS.readFile(image.uri, 'base64').then(res => {
+    //   console.log(res);
+    //   return res;
+    // });
+    // console.log('BASE64', base64);
+    // var byteArray = decodeBase64(base64);
+    // console.log('BYTE ARRAY', byteArray);
+    // const encryptedAttachment = await encryptAttachment(byteArray);
+    // console.log('ENCRYPTED ATTACHMENT', encryptedAttachment);
+    // TODO: ENCRYPTED ATTACHMENTS: Replace image with the encrypted image below 
+
     let uploadResponse = await ChatService.uploadContent(image, {
       rawResponse: false,
       type: image.type,
       onlyContentUri: false,
     });
     console.log('The Uplaod respone', uploadResponse);
-    return uploadResponse;
+    const uploadRes = {
+      ...uploadResponse,
+      // TODO: ENCRYPTED ATTACHMENTS: Expand the object so that it contains all the necesary information for the event
+
+      // ...encryptedAttachment.info,
+      // data: encryptedAttachment.data,
+    };
+    console.log('Res', uploadRes);
+    return uploadRes;
   };
 
   const onPressRequestRoomKeys = () => {

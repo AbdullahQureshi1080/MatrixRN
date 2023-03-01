@@ -98,13 +98,30 @@ const App = props => {
       console.log('THE STORAGE DATA', userMatrixData);
       ChatService.init(userMatrixData);
       // }, 2000);
-
       return;
     }
   }, [userMatrixData]);
 
   useEffect(() => {
-    console.log('The STORE IS UPDATED', store);
+    try {
+      console.log('The STORE IS UPDATED', store);
+      if (!store.data && !store.isAuthenticated) {
+        if (ChatService.client) {
+          console.log('CLient', ChatService.client);
+          console.log('On APP AGAIN');
+          ChatService.clearStores();
+          // indexedDB
+          //   .databases()
+          //   .then(r => {
+          //     for (var i = 0; i < r.length; i++) indexedDB.deleteDatabase(r[i].name);
+          //   })
+          //   .then(() => {
+          //   });
+        }
+      }
+    } catch (error) {
+      console.log('Error clearing stores', error);
+    }
   }, [store.isAuthenticated]);
 
   return (
