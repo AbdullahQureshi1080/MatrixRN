@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import React, {useEffect, useState, useRef} from 'react';
 
-import RNFS from 'react-native-fs';
 
 import Screen from '../../Components/Screen/Screen';
 import newStyles from './RoomStyles';

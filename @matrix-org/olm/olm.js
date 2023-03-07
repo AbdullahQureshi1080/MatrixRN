@@ -29,7 +29,7 @@ var Olm = (function () {
           window.crypto.getRandomValues(b);
         };
       else if (module.exports) {
-        var ca = require('crypto-js');
+        var ca = require('crypto');
         g = function (b) {
           var c = ca.randomBytes(b.length);
           b.set(c);
@@ -65,7 +65,7 @@ var Olm = (function () {
       )
         (m = ia ? require('path').dirname(m) + '/' : __dirname + '/'),
           (ja = function (b, c) {
-            n || (n = require('react-native-fs'));
+            n || (n = require('fs'));
             q || (q = require('path'));
             b = q.normalize(b);
             return n.readFileSync(b, c ? null : 'utf8');
@@ -77,7 +77,7 @@ var Olm = (function () {
             return b;
           }),
           (ka = function (b, c, d) {
-            n || (n = require('react-native-fs'));
+            n || (n = require('fs'));
             q || (q = require('path'));
             b = q.normalize(b);
             n.readFile(b, function (e, f) {

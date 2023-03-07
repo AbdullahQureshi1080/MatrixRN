@@ -59,15 +59,14 @@ const MATRIX_CLIENT_START_OPTIONS = {
   pendingEventOrdering: 'detached',
   timelineSupport: true,
   unstableClientRelationAggregation: true,
-  // fetchFn()
-  // fetchFn: fetch,
+  // sessionStorage:
   // sessionStore: new sdk.MemoryStore(AsyncStorage),
   // sessionStorage: new sdk.WebStorageSessionStore(window.sessionStorage),
   // cryptoStore: new sdk.MemoryCryptoStore(),
   // store: new MemoryStore({
   //   localStorage: AsyncStorage,
   // }),
-  // cryptoStore: new AsyncCryptoStore(AsyncStorage),
+  cryptoStore: new AsyncCryptoStore(AsyncStorage),
   // sessionStore: {
   //   getLocalTrustedBackupPubKey: () => null,
   // }, // js-sdk complains if this isn't supplied but it's only used for remembering a local trusted backup key
@@ -205,14 +204,14 @@ export default class MatrixService {
 
     console.log('BACK UP', backup);
 
-    if (!backup && clientSync == 'READY' && isCryptoEnabled && client.crypto) {
-      this.setupCrossing(matrixCredentials);
-      // } else {
-      //   this.getCrossSigningInfo(matrixCredentials);
-    }
-    if (backup && clientSync == 'READY' && isCryptoEnabled && client.crypto) {
-      this.getCrossSigningInfo(matrixCredentials);
-    }
+    // if (!backup && clientSync == 'READY' && isCryptoEnabled && client.crypto) {
+    //   this.setupCrossing(matrixCredentials);
+    //   // } else {
+    //   //   this.getCrossSigningInfo(matrixCredentials);
+    // }
+    // if (backup && clientSync == 'READY' && isCryptoEnabled && client.crypto) {
+    //   this.getCrossSigningInfo(matrixCredentials);
+    // }
 
     // console.log('clientSync:hey', clientSync, client.isInitialSyncComplete(), client.getKeyBackupVersion);
 
@@ -2106,6 +2105,7 @@ export default class MatrixService {
     const isCrossSigningReady = await client.isCrossSigningReady();
     console.log('isCrossSigningReady', isCrossSigningReady);
     if (isCrossSigningReady) {
+      // this.setAndEnableBackup();
       let backupInfo = await client.getKeyBackupVersion();
       // bootstrapSecretStorage will invoke the function cryptoCallbacks.getSecretStorageKey, which you need to define. This function will have to promp the user to insert his Security Key
       await client.bootstrapSecretStorage();

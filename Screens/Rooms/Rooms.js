@@ -277,7 +277,7 @@ export default function Rooms({navigation}) {
         }}
         labelStyle={{color: color.textLight}}
       /> */}
-          {/* <Button
+          <Button
             name={'See Cross Signing Info'}
             type="PRIMARY"
             size={'LARGE'}
@@ -310,7 +310,7 @@ export default function Rooms({navigation}) {
               alignSelf: 'center',
             }}
             labelStyle={{color: color.textLight}}
-          /> */}
+          />
 
           <FlatList
             data={rooms}

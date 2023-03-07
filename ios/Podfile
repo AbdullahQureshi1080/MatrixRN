@@ -15,7 +15,6 @@ target 'MatrixRN' do
 
   pod 'react-native-config', :path => '../node_modules/react-native-config'
 
-  pod 'RNFS', :path => '../node_modules/react-native-fs'
 
   pod 'RNVectorIcons', :path => '../node_modules/react-native-vector-icons'
 

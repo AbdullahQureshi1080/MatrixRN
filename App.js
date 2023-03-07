@@ -6,6 +6,8 @@
  * @flow strict-local
  */
 
+import PolyfillCrypto from 'react-native-webview-crypto';
+
 import React, {useContext, useEffect, useReducer, useState} from 'react';
 import {ActivityIndicator, LogBox, View} from 'react-native';
 
@@ -102,27 +104,27 @@ const App = props => {
     }
   }, [userMatrixData]);
 
-  useEffect(() => {
-    try {
-      console.log('The STORE IS UPDATED', store);
-      if (!store.data && !store.isAuthenticated) {
-        if (ChatService.client) {
-          console.log('CLient', ChatService.client);
-          console.log('On APP AGAIN');
-          ChatService.clearStores();
-          // indexedDB
-          //   .databases()
-          //   .then(r => {
-          //     for (var i = 0; i < r.length; i++) indexedDB.deleteDatabase(r[i].name);
-          //   })
-          //   .then(() => {
-          //   });
-        }
-      }
-    } catch (error) {
-      console.log('Error clearing stores', error);
-    }
-  }, [store.isAuthenticated]);
+  // useEffect(() => {
+  //   try {
+  //     console.log('The STORE IS UPDATED', store);
+  //     if (!store.data && !store.isAuthenticated) {
+  //       if (ChatService.client) {
+  //         console.log('CLient', ChatService.client);
+  //         console.log('On APP AGAIN');
+  //         ChatService.clearStores();
+  //         // indexedDB
+  //         //   .databases()
+  //         //   .then(r => {
+  //         //     for (var i = 0; i < r.length; i++) indexedDB.deleteDatabase(r[i].name);
+  //         //   })
+  //         //   .then(() => {
+  //         //   });
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.log('Error clearing stores', error);
+  //   }
+  // }, [store.isAuthenticated]);
 
   return (
     <NavigationContainer>
@@ -138,6 +140,7 @@ const App = props => {
 const APPWRAPPER = () => {
   return (
     <AppProvider>
+      <PolyfillCrypto />
       <App />
     </AppProvider>
   );

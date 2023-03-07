@@ -26,6 +26,12 @@ const KEY_ROOMS_PREFIX = E2E_PREFIX + 'rooms/';
 const KEY_SESSIONS_NEEDING_BACKUP = E2E_PREFIX + 'sessionsneedingbackup';
 const KEY_OUTGOING_KEY_REQUEST = E2E_PREFIX + 'outgoingkeyrequest/';
 
+// Missing Keys
+const KEY_PRIVATE_KEYS = E2E_PREFIX + 'privateKeys';
+const KEY_SHARED_HISTORY_INBOUND_GROUP_SESSIONS =
+  E2E_PREFIX + 'sharedHistoryInboundGroupSessions';
+const KEY_PARKED_SHARED_HISTORY = E2E_PREFIX + 'parkedSharedHistory';
+
 // (0, _defineProperty2.default)(this, "outgoingRoomKeyRequests", []);
 // (0, _defineProperty2.default)(this, "account", null);
 // (0, _defineProperty2.default)(this, "crossSigningKeys", null);
@@ -152,8 +158,11 @@ class AsyncTxn {
  * to be swapped out, eg. for unit tests.
  */
 class AsyncCryptoStore {
+  // _sharedHistoryInboundGroupSessions;
   constructor(asyncStorageClass) {
     this.asyncStorage = asyncStorageClass;
+    this.sharedHistoryInboundGroupSessions = {};
+    this.parkedSharedHistory = new Map();
   }
 
   startup() {}
@@ -221,6 +230,11 @@ class AsyncCryptoStore {
   }
 
   storeEndToEndSession(deviceKey, sessionId, sessionInfo, txn) {
+    alert('Hedd');
+    console.log(
+      'endIsNear',
+      sessionInfo,
+    );
     txn.wrap(() => {
       return this._setJsonItem(keyEndToEndSession(deviceKey, sessionId), {
         deviceKey,
@@ -333,8 +347,9 @@ class AsyncCryptoStore {
       const existing = await this._getJsonItem(
         keyEndToEndInboundGroupSession(senderCurve25519Key, sessionId),
       );
+      console.log('endIsNear', existing);
       if (!existing) {
-        await this.storeEndToEndInboundGroupSession(
+        this.storeEndToEndInboundGroupSession(
           senderCurve25519Key,
           sessionId,
           sessionData,
@@ -350,6 +365,18 @@ class AsyncCryptoStore {
     sessionData,
     txn,
   ) {
+    console.log(
+      'AsyncCryptoStore: storeEndToEndInboundGroupSession',
+      senderCurve25519Key,
+      sessionId,
+      sessionData,
+      txn,
+    );
+    console.log(
+      'KEY FOR AS',
+      keyEndToEndInboundGroupSession(senderCurve25519Key, sessionId),
+      sessionData,
+    );
     txn.wrap(() => {
       return this._setJsonItem(
         keyEndToEndInboundGroupSession(senderCurve25519Key, sessionId),
@@ -357,6 +384,8 @@ class AsyncCryptoStore {
       );
     });
   }
+
+  // keyEndToEndInboundGroupSession
 
   storeEndToEndInboundGroupSessionWithheld(
     senderCurve25519Key,
@@ -418,14 +447,25 @@ class AsyncCryptoStore {
       (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
     const sessions = [];
 
+    console.log(
+      'AsyncCryptoStore -> sessions in storage sessionsNeedingBackup',
+      sessionsNeedingBackup,
+    );
+
     for (const k of Object.keys(sessionsNeedingBackup)) {
       const keyParts = k.split('/');
+      console.log('AsyncCryptoStore -> KeyParts', keyParts);
       const senderKey = keyParts[0];
+      console.log('AsyncCryptoStore -> SenderKey', senderKey);
       const sessionId = keyParts[1];
+      console.log('AsyncCryptoStore -> SessionId', sessionId);
 
       const sessionData = await this._getJsonItem(
         keyEndToEndInboundGroupSession(senderKey, sessionId),
       );
+
+      console.log('AsyncCryptoStore -> sessionData', sessionData);
+
       sessions.push({
         senderKey: senderKey,
         sessionId: sessionId,
@@ -436,12 +476,20 @@ class AsyncCryptoStore {
         break;
       }
     }
+    console.log(
+      'AsyncCryptoStore -> sessions in getSessionsNeedingBackup',
+      sessions,
+    );
     return sessions;
   }
 
   async countSessionsNeedingBackup() {
     const sessionsNeedingBackup =
       (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
+    console.log(
+      'AsyncCryptoStore: -> countSessionsNeedingBackup',
+      sessionsNeedingBackup,
+    );
     return Object.keys(sessionsNeedingBackup).length;
   }
 
@@ -477,6 +525,7 @@ class AsyncCryptoStore {
       await this.asyncStorage.removeItem(k);
     }
   }
+
 
   // Olm account
 
@@ -614,25 +663,28 @@ class AsyncCryptoStore {
   }
 
   async addSharedHistoryInboundGroupSession(roomId, senderKey, sessionId) {
-    console.log(
-      'addSharedHistoryInboundGroupSession',
-      'ROOM ID',
-      roomId,
-      'SENDERKEY',
-      senderKey,
-      'SESSION ID',
-      sessionId,
-    );
-    // const sessions = this.sharedHistoryInboundGroupSessions[roomId] || [];
-    // sessions.push([senderKey, sessionId]);
-    // this.sharedHistoryInboundGroupSessions[roomId] = sessions;
+    const sessions = this.sharedHistoryInboundGroupSessions[roomId] || [];
+    sessions.push([senderKey, sessionId]);
+    this.sharedHistoryInboundGroupSessions[roomId] = sessions;
+    console.log('ALERTS --- sharedHistoryInboundGroupSessions', sessions);
   }
 
   async getSharedHistoryInboundGroupSessions(roomId) {
-    console.log('ROOM ID', roomId);
-    // return Promise.resolve(
-    //   this.sharedHistoryInboundGroupSessions[roomId] || [],
-    // );
+    return Promise.resolve(
+      this.sharedHistoryInboundGroupSessions[roomId] || [],
+    );
+  }
+
+  addParkedSharedHistory(roomId, parkedData) {
+    const parked = this.parkedSharedHistory.get(roomId) ?? [];
+    parked.push(parkedData);
+    this.parkedSharedHistory.set(roomId, parked);
+  }
+
+  takeParkedSharedHistory(roomId) {
+    const parked = this.parkedSharedHistory.get(roomId) ?? [];
+    this.parkedSharedHistory.delete(roomId);
+    return Promise.resolve(parked);
   }
 
   async _getJsonItem(key) {
@@ -647,3 +699,8 @@ class AsyncCryptoStore {
 }
 
 module.exports = AsyncCryptoStore;
+
+// addParkedSharedHistory
+// addSharedHistoryInboundGroupSession
+// getSharedHistoryInboundGroupSessions
+// takeParkedSharedHistory
