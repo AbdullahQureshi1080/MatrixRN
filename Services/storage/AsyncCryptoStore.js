@@ -20,14 +20,40 @@ const KEY_CROSS_SIGNING_KEYS = E2E_PREFIX + 'cross_signing_keys';
 const KEY_NOTIFIED_ERROR_DEVICES = E2E_PREFIX + 'notified_error_devices';
 const KEY_DEVICE_DATA = E2E_PREFIX + 'device_data';
 const KEY_INBOUND_SESSION_PREFIX = E2E_PREFIX + 'inboundgroupsessions/';
-const KEY_INBOUND_SESSION_WITHHELD_PREFIX = E2E_PREFIX + 'inboundgroupsessions.withheld/';
+const KEY_INBOUND_SESSION_WITHHELD_PREFIX =
+  E2E_PREFIX + 'inboundgroupsessions.withheld/';
 const KEY_ROOMS_PREFIX = E2E_PREFIX + 'rooms/';
 const KEY_SESSIONS_NEEDING_BACKUP = E2E_PREFIX + 'sessionsneedingbackup';
 const KEY_OUTGOING_KEY_REQUEST = E2E_PREFIX + 'outgoingkeyrequest/';
 
+// Missing Keys
+const KEY_PRIVATE_KEYS = E2E_PREFIX + 'privateKeys';
+const KEY_SHARED_HISTORY_INBOUND_GROUP_SESSIONS =
+  E2E_PREFIX + 'sharedHistoryInboundGroupSessions';
+const KEY_PARKED_SHARED_HISTORY = E2E_PREFIX + 'parkedSharedHistory';
+
+// (0, _defineProperty2.default)(this, "outgoingRoomKeyRequests", []);
+// (0, _defineProperty2.default)(this, "account", null);
+// (0, _defineProperty2.default)(this, "crossSigningKeys", null);
+// (0, _defineProperty2.default)(this, "privateKeys", {});
+// (0, _defineProperty2.default)(this, "sessions", {});
+// (0, _defineProperty2.default)(this, "sessionProblems", {});
+// (0, _defineProperty2.default)(this, "notifiedErrorDevices", {});
+// (0, _defineProperty2.default)(this, "inboundGroupSessions", {});
+// (0, _defineProperty2.default)(this, "inboundGroupSessionsWithheld", {});
+// (0, _defineProperty2.default)(this, "deviceData", null);
+// (0, _defineProperty2.default)(this, "rooms", {});
+// (0, _defineProperty2.default)(this, "sessionsNeedingBackup", {});
+// (0, _defineProperty2.default)(this, "sharedHistoryInboundGroupSessions", {});
+// (0, _defineProperty2.default)(this, "parkedSharedHistory", new Map());
+
 function keyEndToEndSession(deviceKey, sessionKey) {
   return (
-    E2E_PREFIX + 'sessions/' + encodeURIComponent(deviceKey) + '/' + encodeURIComponent(sessionKey)
+    E2E_PREFIX +
+    'sessions/' +
+    encodeURIComponent(deviceKey) +
+    '/' +
+    encodeURIComponent(sessionKey)
   );
 }
 
@@ -47,7 +73,10 @@ function keyEndToEndSessionProblems(deviceKey, sessionKey) {
 
 function keyEndToEndInboundGroupSession(senderKey, sessionId) {
   return (
-    KEY_INBOUND_SESSION_PREFIX + encodeURIComponent(senderKey) + '/' + encodeURIComponent(sessionId)
+    KEY_INBOUND_SESSION_PREFIX +
+    encodeURIComponent(senderKey) +
+    '/' +
+    encodeURIComponent(sessionId)
   );
 }
 
@@ -107,7 +136,9 @@ class AsyncTxn {
 
   _startOperation() {
     if (this._resolveFunc === null) {
-      throw new Error('Tried to start new operation on a finished transaction!');
+      throw new Error(
+        'Tried to start new operation on a finished transaction!',
+      );
     }
     ++this._opsInProgress;
   }
@@ -127,8 +158,11 @@ class AsyncTxn {
  * to be swapped out, eg. for unit tests.
  */
 class AsyncCryptoStore {
+  // _sharedHistoryInboundGroupSessions;
   constructor(asyncStorageClass) {
     this.asyncStorage = asyncStorageClass;
+    this.sharedHistoryInboundGroupSessions = {};
+    this.parkedSharedHistory = new Map();
   }
 
   startup() {}
@@ -145,14 +179,18 @@ class AsyncCryptoStore {
     txn.wrap(async () => {
       const allKeys = await this.asyncStorage.getAllKeys();
 
-      const count = allKeys.filter(k => k.startsWith(E2E_PREFIX + 'sessions/')).length;
+      const count = allKeys.filter(k =>
+        k.startsWith(E2E_PREFIX + 'sessions/'),
+      ).length;
       func(count);
     });
   }
 
   getEndToEndSession(deviceKey, sessionId, txn, func) {
     txn.wrap(async () => {
-      const session = await this._getJsonItem(keyEndToEndSession(deviceKey, sessionId));
+      const session = await this._getJsonItem(
+        keyEndToEndSession(deviceKey, sessionId),
+      );
       func(session);
     });
   }
@@ -161,9 +199,13 @@ class AsyncCryptoStore {
     txn.wrap(async () => {
       const allKeys = await this.asyncStorage.getAllKeys();
       const sessions = {};
-      for (const k of allKeys.filter(k => k.startsWith(keyPrefixEndToEndSession(deviceKey)))) {
+      for (const k of allKeys.filter(k =>
+        k.startsWith(keyPrefixEndToEndSession(deviceKey)),
+      )) {
         const sessionId = decodeURIComponent(k.split('/')[2]);
-        sessions[sessionId] = await this._getJsonItem(keyEndToEndSession(deviceKey, sessionId));
+        sessions[sessionId] = await this._getJsonItem(
+          keyEndToEndSession(deviceKey, sessionId),
+        );
       }
 
       func(sessions);
@@ -173,10 +215,14 @@ class AsyncCryptoStore {
   getAllEndToEndSessions(txn, func) {
     txn.wrap(async () => {
       const allKeys = this.asyncStorage.getAllKeys();
-      for (const k of allKeys.filter(x => x.startsWith(E2E_PREFIX + 'sessions/'))) {
+      for (const k of allKeys.filter(x =>
+        x.startsWith(E2E_PREFIX + 'sessions/'),
+      )) {
         const deviceKey = k.split('/')[1];
         const sessionId = k.split('/')[2];
-        const sessionInfo = await this._getJsonItem(keyEndToEndSession(deviceKey, sessionId));
+        const sessionInfo = await this._getJsonItem(
+          keyEndToEndSession(deviceKey, sessionId),
+        );
         func(sessionInfo);
       }
       func(null);
@@ -184,6 +230,11 @@ class AsyncCryptoStore {
   }
 
   storeEndToEndSession(deviceKey, sessionId, sessionInfo, txn) {
+    alert('Hedd');
+    console.log(
+      'endIsNear',
+      sessionInfo,
+    );
     txn.wrap(() => {
       return this._setJsonItem(keyEndToEndSession(deviceKey, sessionId), {
         deviceKey,
@@ -197,7 +248,7 @@ class AsyncCryptoStore {
   async storeEndToEndSessionProblem(deviceKey, type, fixed) {
     const key = keyEndToEndSessionProblems(deviceKey);
     const problems = (await this._getJsonItem(key)) || [];
-    problems.push({ type, fixed, time: Date.now() });
+    problems.push({type, fixed, time: Date.now()});
     problems.sort((a, b) => {
       return a.time - b.time;
     });
@@ -213,7 +264,7 @@ class AsyncCryptoStore {
     const lastProblem = problems[problems.length - 1];
     for (const problem of problems) {
       if (problem.time > timestamp) {
-        return Object.assign({}, problem, { fixed: lastProblem.fixed });
+        return Object.assign({}, problem, {fixed: lastProblem.fixed});
       }
     }
     if (lastProblem.fixed) {
@@ -224,11 +275,12 @@ class AsyncCryptoStore {
   }
 
   async filterOutNotifiedErrorDevices(devices) {
-    const notifiedErrorDevices = (await this._getJsonItem(KEY_NOTIFIED_ERROR_DEVICES)) || {};
+    const notifiedErrorDevices =
+      (await this._getJsonItem(KEY_NOTIFIED_ERROR_DEVICES)) || {};
     const ret = [];
 
     for (const device of devices) {
-      const { userId, deviceInfo } = device;
+      const {userId, deviceInfo} = device;
       if (userId in notifiedErrorDevices) {
         if (!(deviceInfo.deviceId in notifiedErrorDevices[userId])) {
           ret.push(device);
@@ -236,7 +288,7 @@ class AsyncCryptoStore {
         }
       } else {
         ret.push(device);
-        notifiedErrorDevices[userId] = { [deviceInfo.deviceId]: true };
+        notifiedErrorDevices[userId] = {[deviceInfo.deviceId]: true};
       }
     }
 
@@ -250,19 +302,24 @@ class AsyncCryptoStore {
   getEndToEndInboundGroupSession(senderCurve25519Key, sessionId, txn, func) {
     txn.wrap(async () => {
       func(
-        await this._getJsonItem(keyEndToEndInboundGroupSession(senderCurve25519Key, sessionId)),
         await this._getJsonItem(
-          keyEndToEndInboundGroupSessionWithheld(senderCurve25519Key, sessionId)
-        )
+          keyEndToEndInboundGroupSession(senderCurve25519Key, sessionId),
+        ),
+        await this._getJsonItem(
+          keyEndToEndInboundGroupSessionWithheld(
+            senderCurve25519Key,
+            sessionId,
+          ),
+        ),
       );
     });
   }
 
   getAllEndToEndInboundGroupSessions(txn, func) {
     txn.wrap(async () => {
-      const inboundGroupSessionKeys = (await this.asyncStorage.getAllKeys()).filter(k =>
-        k.startsWith(KEY_INBOUND_SESSION_PREFIX)
-      );
+      const inboundGroupSessionKeys = (
+        await this.asyncStorage.getAllKeys()
+      ).filter(k => k.startsWith(KEY_INBOUND_SESSION_PREFIX));
 
       for (const k of inboundGroupSessionKeys) {
         const keyParts = k.split('/');
@@ -280,36 +337,66 @@ class AsyncCryptoStore {
     });
   }
 
-  addEndToEndInboundGroupSession(senderCurve25519Key, sessionId, sessionData, txn) {
+  addEndToEndInboundGroupSession(
+    senderCurve25519Key,
+    sessionId,
+    sessionData,
+    txn,
+  ) {
     txn.wrap(async () => {
       const existing = await this._getJsonItem(
-        keyEndToEndInboundGroupSession(senderCurve25519Key, sessionId)
+        keyEndToEndInboundGroupSession(senderCurve25519Key, sessionId),
       );
+      console.log('endIsNear', existing);
       if (!existing) {
-        await this.storeEndToEndInboundGroupSession(
+        this.storeEndToEndInboundGroupSession(
           senderCurve25519Key,
           sessionId,
           sessionData,
-          txn
+          txn,
         );
       }
     });
   }
 
-  storeEndToEndInboundGroupSession(senderCurve25519Key, sessionId, sessionData, txn) {
+  storeEndToEndInboundGroupSession(
+    senderCurve25519Key,
+    sessionId,
+    sessionData,
+    txn,
+  ) {
+    console.log(
+      'AsyncCryptoStore: storeEndToEndInboundGroupSession',
+      senderCurve25519Key,
+      sessionId,
+      sessionData,
+      txn,
+    );
+    console.log(
+      'KEY FOR AS',
+      keyEndToEndInboundGroupSession(senderCurve25519Key, sessionId),
+      sessionData,
+    );
     txn.wrap(() => {
       return this._setJsonItem(
         keyEndToEndInboundGroupSession(senderCurve25519Key, sessionId),
-        sessionData
+        sessionData,
       );
     });
   }
 
-  storeEndToEndInboundGroupSessionWithheld(senderCurve25519Key, sessionId, sessionData, txn) {
+  // keyEndToEndInboundGroupSession
+
+  storeEndToEndInboundGroupSessionWithheld(
+    senderCurve25519Key,
+    sessionId,
+    sessionData,
+    txn,
+  ) {
     txn.wrap(() => {
       return this._setJsonItem(
         keyEndToEndInboundGroupSessionWithheld(senderCurve25519Key, sessionId),
-        sessionData
+        sessionData,
       );
     });
   }
@@ -340,7 +427,9 @@ class AsyncCryptoStore {
     txn.wrap(async () => {
       const prefix = keyEndToEndRoomsPrefix('');
 
-      const e2eRoomsKeys = (await this.asyncStorage.getAllKeys()).filter(k => k.startsWith(prefix));
+      const e2eRoomsKeys = (await this.asyncStorage.getAllKeys()).filter(k =>
+        k.startsWith(prefix),
+      );
 
       const result = {};
       for (const k of e2eRoomsKeys) {
@@ -354,17 +443,29 @@ class AsyncCryptoStore {
   // Sessions Needing Backup
 
   async getSessionsNeedingBackup(limit) {
-    const sessionsNeedingBackup = (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
+    const sessionsNeedingBackup =
+      (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
     const sessions = [];
+
+    console.log(
+      'AsyncCryptoStore -> sessions in storage sessionsNeedingBackup',
+      sessionsNeedingBackup,
+    );
 
     for (const k of Object.keys(sessionsNeedingBackup)) {
       const keyParts = k.split('/');
+      console.log('AsyncCryptoStore -> KeyParts', keyParts);
       const senderKey = keyParts[0];
+      console.log('AsyncCryptoStore -> SenderKey', senderKey);
       const sessionId = keyParts[1];
+      console.log('AsyncCryptoStore -> SessionId', sessionId);
 
       const sessionData = await this._getJsonItem(
-        keyEndToEndInboundGroupSession(senderKey, sessionId)
+        keyEndToEndInboundGroupSession(senderKey, sessionId),
       );
+
+      console.log('AsyncCryptoStore -> sessionData', sessionData);
+
       sessions.push({
         senderKey: senderKey,
         sessionId: sessionId,
@@ -375,16 +476,26 @@ class AsyncCryptoStore {
         break;
       }
     }
+    console.log(
+      'AsyncCryptoStore -> sessions in getSessionsNeedingBackup',
+      sessions,
+    );
     return sessions;
   }
 
   async countSessionsNeedingBackup() {
-    const sessionsNeedingBackup = (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
+    const sessionsNeedingBackup =
+      (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
+    console.log(
+      'AsyncCryptoStore: -> countSessionsNeedingBackup',
+      sessionsNeedingBackup,
+    );
     return Object.keys(sessionsNeedingBackup).length;
   }
 
   async unmarkSessionsNeedingBackup(sessions) {
-    const sessionsNeedingBackup = (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
+    const sessionsNeedingBackup =
+      (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
     for (const session of sessions) {
       delete sessionsNeedingBackup[session.senderKey + '/' + session.sessionId];
     }
@@ -392,7 +503,8 @@ class AsyncCryptoStore {
   }
 
   async markSessionsNeedingBackup(sessions) {
-    const sessionsNeedingBackup = (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
+    const sessionsNeedingBackup =
+      (await this._getJsonItem(KEY_SESSIONS_NEEDING_BACKUP)) || {};
     for (const session of sessions) {
       sessionsNeedingBackup[session.senderKey + '/' + session.sessionId] = true;
     }
@@ -406,13 +518,14 @@ class AsyncCryptoStore {
    */
   async deleteAllData() {
     const allE2eStorageKeys = (await this.asyncStorage.getAllKeys()).filter(k =>
-      k.startsWith(E2E_PREFIX)
+      k.startsWith(E2E_PREFIX),
     );
 
     for (const k of allE2eStorageKeys) {
       await this.asyncStorage.removeItem(k);
     }
   }
+
 
   // Olm account
 
@@ -461,7 +574,10 @@ class AsyncCryptoStore {
     if (req) {
       return req;
     }
-    await this._setJsonItem(keyOutgoingKeyRequestPrefix(request.requestId), request);
+    await this._setJsonItem(
+      keyOutgoingKeyRequestPrefix(request.requestId),
+      request,
+    );
   }
 
   async getOutgoingRoomKeyRequest(requestBody) {
@@ -508,7 +624,10 @@ class AsyncCryptoStore {
     const allRequestIds = await this._allOutgoingKeyRequestKeys();
     for (const reqId of allRequestIds) {
       const req = await this._getJsonItem(reqId);
-      if (req.recipients.includes({ userId, deviceId }) && wantedStates.includes(req.state)) {
+      if (
+        req.recipients.includes({userId, deviceId}) &&
+        wantedStates.includes(req.state)
+      ) {
         reqs.push(req);
       }
     }
@@ -543,6 +662,31 @@ class AsyncCryptoStore {
     return allKeys.filter(k => k.startsWith(KEY_OUTGOING_KEY_REQUEST));
   }
 
+  async addSharedHistoryInboundGroupSession(roomId, senderKey, sessionId) {
+    const sessions = this.sharedHistoryInboundGroupSessions[roomId] || [];
+    sessions.push([senderKey, sessionId]);
+    this.sharedHistoryInboundGroupSessions[roomId] = sessions;
+    console.log('ALERTS --- sharedHistoryInboundGroupSessions', sessions);
+  }
+
+  async getSharedHistoryInboundGroupSessions(roomId) {
+    return Promise.resolve(
+      this.sharedHistoryInboundGroupSessions[roomId] || [],
+    );
+  }
+
+  addParkedSharedHistory(roomId, parkedData) {
+    const parked = this.parkedSharedHistory.get(roomId) ?? [];
+    parked.push(parkedData);
+    this.parkedSharedHistory.set(roomId, parked);
+  }
+
+  takeParkedSharedHistory(roomId) {
+    const parked = this.parkedSharedHistory.get(roomId) ?? [];
+    this.parkedSharedHistory.delete(roomId);
+    return Promise.resolve(parked);
+  }
+
   async _getJsonItem(key) {
     // if the key is absent, AsyncStore.getItem() returns null, and
     // JSON.parse(null) === null, so this returns null.
@@ -555,3 +699,8 @@ class AsyncCryptoStore {
 }
 
 module.exports = AsyncCryptoStore;
+
+// addParkedSharedHistory
+// addSharedHistoryInboundGroupSession
+// getSharedHistoryInboundGroupSessions
+// takeParkedSharedHistory

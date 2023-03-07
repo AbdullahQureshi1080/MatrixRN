@@ -15,6 +15,7 @@ const styles = (isDarkMode, size) =>
       alignSelf: 'center',
       //   marginHorizontal: 20,
       width: calculateWidth(size),
+      marginVertical: 5,
     },
     NAME: {
       fontSize: 16,
@@ -22,10 +23,10 @@ const styles = (isDarkMode, size) =>
       color: Colors.light,
       fontWeight: '700',
     },
-    PRIMARY: {
-      position: 'absolute',
-      bottom: 0,
-    },
+    // PRIMARY: {
+    //   position: 'absolute',
+    //   bottom: 0,
+    // },
   });
 
 export default styles;

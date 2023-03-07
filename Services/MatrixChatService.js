@@ -26,6 +26,15 @@ import {Alert} from 'react-native';
 import {async} from 'rxjs';
 import {getUserMatrixData} from '../Utils/Storage';
 import {OlmDevice} from 'matrix-js-sdk/lib/crypto/OlmDevice';
+import {StartVerification} from './crypto';
+import {SasEvent} from 'matrix-js-sdk/lib/crypto/verification/SAS';
+import {accounts} from '../Api/static';
+import {deriveKey} from 'matrix-js-sdk/src/crypto/key_passphrase';
+import {getDeviceID} from '../Utils/Device';
+import {getAllUsersFromDatabase} from '../database/db';
+
+import {decryptPassword, encryptPassword} from '../Utils/Helpers';
+import {decryptFile} from '../Utils/decrypt';
 
 // import localStorage
 
@@ -50,13 +59,14 @@ const MATRIX_CLIENT_START_OPTIONS = {
   pendingEventOrdering: 'detached',
   timelineSupport: true,
   unstableClientRelationAggregation: true,
-  sessionStore: new sdk.MemoryStore(AsyncStorage),
+  // sessionStorage:
+  // sessionStore: new sdk.MemoryStore(AsyncStorage),
   // sessionStorage: new sdk.WebStorageSessionStore(window.sessionStorage),
-  cryptoStore: new sdk.MemoryCryptoStore(),
+  // cryptoStore: new sdk.MemoryCryptoStore(),
   // store: new MemoryStore({
   //   localStorage: AsyncStorage,
   // }),
-  // cryptoStore: new AsyncCryptoStore(AsyncStorage),
+  cryptoStore: new AsyncCryptoStore(AsyncStorage),
   // sessionStore: {
   //   getLocalTrustedBackupPubKey: () => null,
   // }, // js-sdk complains if this isn't supplied but it's only used for remembering a local trusted backup key
@@ -65,14 +75,16 @@ const MATRIX_CLIENT_START_OPTIONS = {
 export default class MatrixService {
   /**@type {sdk.MatrixClient}  */
   client = null;
-  // host = Config.CHAT_SERVER_URL;
-  host = 'http://192.168.18.127:8008';
+  host = 'http://192.168.18.22:8008';
+  // host = 'http://192.168.18.22:8008';
+  // host = 'https://8cc1-2407-d000-a-1059-244e-6b78-3e26-19a0.ap.ngrok.io';
   user = null;
   username = null;
   ready = null;
   accessToken = null;
   userId = null;
   deviceId = null;
+  // crossSigning = false;
 
   constructor(matrixCredentials) {
     this.client = null;
@@ -90,59 +102,124 @@ export default class MatrixService {
       userId: matrixCredentials.userId,
       deviceId: matrixCredentials.deviceId,
       ...MATRIX_CLIENT_START_OPTIONS,
+      fetchFn: (url, args) => {
+        const uri = new URL(url);
+        const searchParams = new URLSearchParams(uri);
+        searchParams.delete('_');
+        return fetch(url, args);
+      },
+      cryptoCallbacks: {
+        getSecretStorageKey: async ({keys}) => {
+          const keypharse = 'secure!@#$%12345%';
+          // const keypharse =
+          //   'EsTs N5f5 56x7 TVzS QyTo oERT eLXp dCg5 UzUa aKjK xgAT xrdx';
+
+          console.log('KEYINFOS-getSecretStorageKey', keys);
+
+          // const client = await this.getClient();
+          if (!keypharse) return null;
+
+          let keyId = await client.getDefaultSecretStorageKeyId(); //MatrixClient
+
+          console.log('KEY ID-getSecretStorageKey', keyId);
+
+          let keyInfo;
+          if (keyId) {
+            console.log('KEYINFO CHECK-getSecretStorageKey', keyInfo);
+            keyInfo = keys[keyId];
+            if (!keyInfo) {
+              keyId = null;
+            }
+          }
+
+          console.log('KEYINFO-getSecretStorageKey', keyInfo);
+
+          if (!keyId) {
+            const keyInfoEntries = Object.entries(keys);
+            if (keyInfoEntries.length > 1) {
+              throw new Error('Multiple storage key requests not implemented');
+            }
+            [keyId, keyInfo] = keyInfoEntries[0];
+          }
+
+          if (!keyInfo) return null;
+
+          const derivedKey = await deriveKey(
+            keypharse,
+            keyInfo.passphrase.salt,
+            keyInfo.passphrase.iterations,
+          );
+
+          return [keyId, derivedKey];
+        },
+        // this.custom_getSecretStorageKey
+      },
     });
+
+    // client.cryptoCallbacks.getSecretStorageKey =
+    //   this.custom_getSecretStorageKey;
+
     this.deviceId = matrixCredentials.deviceId;
     this.userId = matrixCredentials.userId;
     this.accessToken = matrixCredentials.accessToken;
 
-    // const user = await client.login('m.login.password', {
-    //   user: 'lucian',
-    //   password: 'Lucian!@#$%',
-    //   userId: matrixCredentials.userId,
-    // });
-
-    // console.log('THE USER BY LOGIN', user);
-
-    // this.user = {
-    //   baseUrl: this.host,
-    //   accessToken: matrixCredentials.accessToken,
-    //   userId: matrixCredentials.userId,
-    //   deviceId: matrixCredentials.deviceId,
-    // };
-    // let user = await client.login('m.login.password', {
-    //   user: username,
-    //   password: password,
-    //   userId: matrixCredentials.matrixUserId,
-    // });
     console.log('client ====', client);
 
     let clientSyncPromise = null;
 
     await client.initCrypto();
-    // .then(async () => {
-    //   client.setGlobalErrorOnUnknownDevices(false);
+
     await client.startClient({initialSyncLimit: 10});
-    // });
 
     client.setGlobalErrorOnUnknownDevices(false);
 
-    // await client.startClient({initialSyncLimit: 10});
+    // const isCryptoEnabled =
+    //   client.crypto &&
+    //   client.isCryptoEnabled() &&
+    //   client.isInitialSyncComplete();
 
-    // await client.startClient({initialSyncLimit: 10});
+    // console.log('isCryptoEnabled', isCryptoEnabled, client.crypto);
+    // if (isCryptoEnabled ) {
+    //   this.getCrossSigningInfo(matrixCredentials);
+    // }
+
     clientSyncPromise = new Promise((resolve, reject) => {
       client.once('sync', function (state, prevState, res) {
         console.log('client sync state: ', state, prevState, res);
         if (state === 'PREPARED') {
-          resolve();
+          // Alert.alert(`Prepared ${client.isCryptoEnabled()}`);
+          resolve('READY');
         } else {
           reject(new Error(`State not prepared, instead: ${state}`));
         }
       });
+      // console.log('resolve', resolve);
     });
 
-    await clientSyncPromise;
+    const clientSync = await clientSyncPromise;
 
-    // this.verifyDevice(matrixCredentials.userId, matrixCredentials.deviceId);
+    const backup = await client.getKeyBackupVersion();
+    const isCryptoEnabled =
+      client.isCryptoEnabled() && client.isInitialSyncComplete();
+
+    console.log('BACK UP', backup);
+
+    // if (!backup && clientSync == 'READY' && isCryptoEnabled && client.crypto) {
+    //   this.setupCrossing(matrixCredentials);
+    //   // } else {
+    //   //   this.getCrossSigningInfo(matrixCredentials);
+    // }
+    // if (backup && clientSync == 'READY' && isCryptoEnabled && client.crypto) {
+    //   this.getCrossSigningInfo(matrixCredentials);
+    // }
+
+    // console.log('clientSync:hey', clientSync, client.isInitialSyncComplete(), client.getKeyBackupVersion);
+
+    // this.verifyDevice(
+    //   client,
+    //   matrixCredentials.userId,
+    //   matrixCredentials.deviceId,
+    // );
 
     client.on('RoomMember.membership', function (event, member) {
       if (
@@ -159,27 +236,19 @@ export default class MatrixService {
     // this.client = client;
 
     console.log('THE THIS. CLIENT', this.client);
+
+    alert('Client Initialized');
+
     return client;
   }
 
   async getClient() {
-    console.log('THE CLIENT IN GET CLIENT', this.client);
+    // console.log('THE CLIENT IN GET CLIENT', this.client);
     if (!this.client) {
       let client = await this.ready;
       this.client = client;
     }
     return this.client;
-  }
-
-  async logOut() {
-    try {
-      const client = await this.getClient();
-      await client.logout();
-      this.ready = false;
-      this.client = null;
-      this.accessToken = null;
-      this.userId = null;
-    } catch (error) {}
   }
 
   async init(activeCredentials) {
@@ -196,8 +265,22 @@ export default class MatrixService {
     }
 
     if (!useCredentials) {
-      let client = sdk.createClient(this.host);
+      let client = sdk.createClient({
+        baseUrl: this.host,
+        fetchFn: (url, args) => {
+          const uri = new URL(url);
+          const searchParams = new URLSearchParams(uri);
+          searchParams.delete('_');
+          return fetch(url, args);
+        },
+        // cryptoCallbacks: {getSecretStorageKey: this.custom_getSecretStorageKey},
+        ...MATRIX_CLIENT_START_OPTIONS,
+      });
+
       this.client = client;
+
+      // client.cryptoCallbacks.getSecretStorageKey =
+      //   this.custom_getSecretStorageKey();
       return Alert.alert('No Data');
     }
 
@@ -207,7 +290,7 @@ export default class MatrixService {
         // console.log('Public Rooms: %s', JSON.stringify(data));
       });
       this.client = client;
-
+      // this.setAndEnableBackup(client);
       return client;
     } catch (error) {
       return error;
@@ -273,6 +356,7 @@ export default class MatrixService {
   async getUserProfile(userId) {
     const client = await this.getClient();
     // const chat = await client.getRoomMessagesFromRoomID();
+
     let profile = await client.getProfileInfo(userId);
     profile = {...profile, userId};
 
@@ -331,6 +415,9 @@ export default class MatrixService {
       // client.crypto
       let decryptedEvent = await client.crypto.decryptEvent(e);
       console.log('THE EVENT:EVENT:EVENT', decryptedEvent);
+      if (!decryptedEvent) {
+        Alert.alert('Errorr');
+      }
       return {
         decryptedEvent: await Promise.resolve(decryptedEvent),
         event: e.event,
@@ -377,7 +464,7 @@ export default class MatrixService {
     //   .then(message => {
     //     callback(message);
     //   })
-    //   .catch(console.log);
+    //   .catch(console.log);t
 
     let messageTextsP = messages.map(
       async e => await this.extractMessageFromEvent1(e),
@@ -396,15 +483,7 @@ export default class MatrixService {
 
     const room = await this.getRoomById(roomId);
 
-    // FOR END TO END START =================
-    console.log('All The Events', room);
-    const filterEncryptedEvents = room.timeline.filter(
-      t => t.event.type === 'm.room.encrypted',
-    );
-
-    // FOR END TO END CLOSE =================
-
-    console.log('The ROOM : SDK METHOD', room);
+    this.autoVerify(roomId);
 
     const accountData = room.accountData;
 
@@ -413,7 +492,13 @@ export default class MatrixService {
 
     let timeline = room.getLiveTimeline();
 
+    console.log('THE LIVE TIMELINE', client.room);
+
+    // /
+
     let eventsFromTimeline = timeline.getEvents();
+
+    // console.log('THE EVENTS FROM TIMELINE', eventsFromTimeline);
 
     let messageEvents = eventsFromTimeline.filter(
       e => e.getType() === 'm.room.message',
@@ -438,24 +523,30 @@ export default class MatrixService {
 
     // let result = await client.scrollback(a, limit);
     // console.log('--------> newRoomresult', c, c.messages);
+
     // console.log(timeline);
-    let messages = await this.extractTextMessagesTimeline1(
-      c.messages.chunk,
-      filterEncryptedEvents,
-    );
+
+    // const roomEvents = room.getT
+
+    let messages = await this.extractEventsInitialFromSync(c.messages.chunk);
+    // let messages = await this.extractTextMessagesTimeline1(
+    //   c.messages.chunk,
+    //   filterEncryptedEvents,
+    // );
 
     // let updateReadPropertyMessages =
     // console.log('-----> getRoomMessagesFromRoomID', messages);
     let stoppingIndex = 0;
     let messageEventsFromUser = messages.filter((e, index) => {
-      if (e.id == fullyReadEventId) {
+      // console.log('THE E ID ISSUE', e);
+      if (e?.id == fullyReadEventId) {
         console.log('Index to Stop:', index);
         stoppingIndex = index;
         // e.read = true;
         // return e;
       }
 
-      if (e.from.id == this.userId) {
+      if (e?.from?.id == this.userId) {
         if (stoppingIndex > 0) {
           // e.read = true;
           return e;
@@ -490,6 +581,31 @@ export default class MatrixService {
 
   async sendImageMessageToRoom(roomId, message) {
     const client = await this.getClient();
+    // TODO: ENCRYPTED ATTACHMENTS: Replace content object with this for encrypted attachments
+
+    // var content = {
+    //   body: message.message,
+    //   file: {
+    //     url: message.url,
+    //     v: message.v,
+    //     key: message.key,
+    //     iv: message.iv,
+    //     hashes: message.hashes,
+    //   },
+    //   info: {
+    //     iv: message.iv,
+    //     key: message.key,
+    //     url: message.url,
+    //     v: message.v,
+    //     h: message.height,
+    //     mimetype: message.mimetype,
+    //     size: message.size,
+    //     w: message.width,
+    //   },
+    //   msgtype: 'm.image',
+    //   url: message.url,
+    // };
+
     var content = {
       body: message.message,
       info: {
@@ -654,6 +770,7 @@ export default class MatrixService {
         imageMessage.mimetype = content.info.mimetype;
         imageMessage.size = content.info.size;
         imageMessage.url = content.url;
+        // TODO: ENCRYPTED ATTACHMENTS: replace matrix URL with a local assests (base64, fileLink etc)
         imageMessage.url = client.mxcUrlToHttp(imageMessage.url);
 
         message = imageMessage;
@@ -717,7 +834,7 @@ export default class MatrixService {
       // Alert.alert('Come here');
       return null;
     }
-    this.autoVerify(event.room_id);
+    // this.autoVerify(event.room_id);
     let content = decryptedEvent?.clearEvent?.content;
     console.log('The Content Object', content);
     let messageType = this.toMessageType(content.msgtype);
@@ -794,153 +911,363 @@ export default class MatrixService {
       throw new Error(`No callback provided`);
     }
     const client = await this.getClient();
-
-    // console.log('CLIENT: onMessageRecieve', client, roomId);
+    const forwardDeviceKeys = this.forwardDeviceKeys;
+    const userId = this.userId;
+    const deviceId = this.deviceId;
 
     client.on('toDeviceEvent', async function (event, room) {
-      Alert.alert('TO Device Event');
-      console.log('THE EVENT: VERIFICATION', event);
-      if (event.getType() == 'm.key.verification.request') {
-        client.emit('m.key.verification.ready', async function (respone) {
-          console.log("Hi, I'm Ready");
+      console.log('Device Listener ->', event);
+
+      if (event.getType() === 'm.room_key_request') {
+        console.log('Device Listener ->  m.room_key_request', event);
+        const contentMap = {
+          messages: {
+            [userId]: {
+              [deviceId]: {...event.event.content},
+            },
+          },
+        };
+        client.sendToDevice('m.forwarded_room_key', contentMap);
+      }
+
+      // if (event.getType() === 'm.forwarded_room_key') {
+      //   console.log('Device Listener ->  m.forwarded_room_key', event);
+      // }
+
+      if (event.getType() === 'm.key.verification.request') {
+        // Alert.alert('Verification Request');
+        console.log(
+          'Device Listener ->  m.key.verification.request',
+          event.event.content,
+        );
+        console.log('Device Listener ->  m.key.verification.request', event);
+        client.sendToDevice('m.key.verification.ready', {
+          messages: {
+            [userId]: {
+              [deviceId]: {...event.event.content},
+            },
+          },
         });
       }
-      if (event.getType() == 'm.room_key_request') {
-        Alert.alert('Requesting Room KEY');
-        conosle.log('KEY_REQUEST_EVENT', event);
-        sendToDeviceForwardKeys(event);
-        // client.emit('m.forwarded_room_key', async function (response) {
-        //   sendToDeviceForwardKeys();
-        //   console.log("Hi, I'm Ready: m.key_key_request", response);
-        // });
-      }
+
+      // if (event.getType() === 'm.room.encrypted') {
+      //   console.log('Device Listener ->  m.room.encrypted', event);
+      //   const dv = await client.crypto.decryptEvent(event);
+      //   console.log('Device Listener ->  m.room.encrypted - dv', dv);
+      // }
     });
 
-    client.on('Room.receipt', async function (event, room) {
-      console.log('THE ROOM ID', room.roomId);
-      console.log('EVENT THAT HAS BEEN READ', event, room);
-      if (room.roomId === roomId) {
-        // console.log('EVENT THAT HAS BEEN READ', event, room);
-        // event
-        var receiptContent = event.getContent();
-        var eventKeys = Object.keys(receiptContent);
-        var eventId = eventKeys[0];
-        console.log('Hello', receiptContent, eventId, eventKeys);
-        var matrixMessageEvent = room.timeline.filter(
-          me => me.event.event_id == eventId,
-        );
-        let senderObj = null;
-        let senderKey = null;
-        if (receiptContent) {
-          senderObj = receiptContent[eventId]['m.read'];
-          senderKey = Object.keys(senderObj)[0];
-          console.log('THE SENDER OBJ,KEY', senderObj, senderKey);
-          let eventAlterRes = {
-            sender: {
-              userId: senderKey,
-            },
-          };
+    // client.on('crypto.verification.request', async function (event) {
+    //   console.log('EVENT IS EVENT', event.event);
+    //   // if (event.getType() === 'm.key.verification.request') {
+    //   //   Alert.alert('Verification Request: Room Key');
+    //   //   // console.log('Device Listener ->  m.key.verification.request', event);
+    //   //   // client.sendToDevice('m.key.verification.ready',);
+    //   // }
+    // });
 
-          console.log(
-            'THE MATRIX MESSAGE EVENT READ WALA',
-            matrixMessageEvent[0],
-          );
-          if (senderKey !== room.myUserId) {
-            // Alert.alert('HIya');
-            let setRoomReadMarker = await client.setRoomReadMarkers(
-              roomId,
-              eventId,
-              matrixMessageEvent[0],
-            );
-            // await client.sendReadReceipt(matrixMessageEvent[0]);
-            console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
-          }
-          // let setRoomReadMarker = await client.setRoomReadMarkers(
-          //   roomId,
-          //   eventId,
-          //   matrixMessageEvent[0],
-          // );
-          // console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
-          callback(null, eventAlterRes, room.myUserId);
-        }
-      }
-    });
+    // client.on('toDeviceEvent', async function (event, room) {
+    //   // Alert.alert('TO Device Event');
+    //   console.log('TO DEVICE EVENT', event);
+    //   // if (event.getType() === 'm.key.verification.request') {
+    //   //   console.log('THE EVENT: VERIFICATION', event);
+    //   //   const responseVerificationReady = client.sendToDevice(
+    //   //     'm.key.verification.ready',
+    //   //     {
+    //   //       user: userId,
+    //   //       deviceId: deviceId,
+    //   //       content: {
+    //   //         ...event.body,
+    //   //         forwarding_curve25519_key_chain:
+    //   //           event.forwarding_curve25519_key_chain,
+    //   //         sender_claimed_ed25519_key: event.senderCurve25519Key,
+    //   //       },
+    //   //     },
+    //   //   );
+    //   //   console.log('ResponesFromVerificationReady', responseVerificationReady);
+    //   // }
+
+    //   if (event.getType() === 'm.room_key_request') {
+    //     // Alert.alert('Requesting Room KEY');
+    //     console.log('KEY_REQUEST_EVENT', event);
+    //     // console.
+    //     // console.log('THE DECRPTED EVENT', client.crypto.decryptEvent(event));
+    //     const responseForwardKey = await client.sendToDevice(
+    //       'm.forwarded_room_key',
+    //       {
+    //         algorithm: event.event.content.body.algorithm,
+    //         forwarding_curve25519_key_chain: event.forwardingCurve25519KeyChain,
+    //         room_id: event.event.content.body.room_id,
+    //         // sender_claimed_ed25519_key:
+    //         sender_key: event.event.content.body.sender_key,
+    //         session_id: event.event.content.body.session_id,
+
+    //         // user: userId,
+    //         // deviceId: deviceId,
+    //         // content: {
+    //         //   ...event.body,
+    //         //   forwarding_curve25519_key_chain:
+    //         //     event.forwarding_curve25519_key_chain,
+    //         //   sender_claimed_ed25519_key: event.senderCurve25519Key,
+    //         // },
+    //       },
+    //     );
+    //     // const responseForwardKey = forwardDeviceKeys(event);
+    //     // // this.fo;
+    //     // // let responseForwardKey = await this.forwardDeviceKeys(event);
+    //     console.log('responseForwardKey, ', responseForwardKey);
+    //     // client.emit('m.forwarded_room_key', async function (response) {
+    //     //   sendToDeviceForwardKeys();
+    //     //   console.log("Hi, I'm Ready: m.key_key_request", response);
+    //     // });
+    //   }
+    //   // this;
+    // });
+
+    // this.forwardDeviceKeys()
+
+    // client.on('Room.receipt', async function (event, room) {
+    //   console.log('THE ROOM ID', room.roomId);
+    //   console.log('EVENT THAT HAS BEEN READ', event, room);
+    //   if (room.roomId === roomId) {
+    //     // console.log('EVENT THAT HAS BEEN READ', event, room);
+    //     // event
+    //     var receiptContent = event.getContent();
+    //     var eventKeys = Object.keys(receiptContent);
+    //     var eventId = eventKeys[0];
+    //     console.log('Hello', receiptContent, eventId, eventKeys);
+    //     var matrixMessageEvent = room.timeline.filter(
+    //       me => me.event.event_id == eventId,
+    //     );
+    //     let senderObj = null;
+    //     let senderKey = null;
+    //     if (receiptContent) {
+    //       senderObj = receiptContent[eventId]['m.read'];
+    //       senderKey = Object.keys(senderObj)[0];
+    //       console.log('THE SENDER OBJ,KEY', senderObj, senderKey);
+    //       let eventAlterRes = {
+    //         sender: {
+    //           userId: senderKey,
+    //         },
+    //       };
+
+    //       console.log(
+    //         'THE MATRIX MESSAGE EVENT READ WALA',
+    //         matrixMessageEvent[0],
+    //       );
+    //       if (senderKey !== room.myUserId) {
+    //         // Alert.alert('HIya');
+    //         let setRoomReadMarker = await client.setRoomReadMarkers(
+    //           roomId,
+    //           eventId,
+    //           matrixMessageEvent[0],
+    //         );
+    //         // await client.sendReadReceipt(matrixMessageEvent[0]);
+    //         console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
+    //       }
+    //       // let setRoomReadMarker = await client.setRoomReadMarkers(
+    //       //   roomId,
+    //       //   eventId,
+    //       //   matrixMessageEvent[0],
+    //       // );
+    //       // console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
+    //       callback(null, eventAlterRes, room.myUserId);
+    //     }
+    //   }
+    // });
 
     client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
-      // Alert.alert('Listener Actvated');
-      console.log('EVENT', event);
-      // Alert.alert('Hi');
+      console.log('=======> ', event);
 
       if (event.event.type === 'm.room.encrypted') {
-        // const event = client.crypto.decryptEvent(event);
-        this.autoVerify(event.event.room_id);
-        // try {
-        // let alteredEvent = event;
-        // alteredEvent.
         console.log(
           '================= In Room Encrpted Text Start ==============',
         );
-        const eventExtraction = await client.crypto.decryptEvent(event);
-        console.log('The Event Extraction', eventExtraction);
+
+        const eventHandled = await this.handleEvent(event.event);
+        const extractedMessage = await this.extractMessageFromMatrixEvent(
+          eventHandled,
+        );
+
+        console.log('The Event Extraction', eventHandled, extractedMessage);
         console.log('================= In Room Encrpted End ==============');
-        // ({ body } = event.clearEvent.content);
-        // } catch (error) {
-        //   console.error('#### ', error);
-        // }
-        return this.extractMessageFromEncryptedEvent(
-          event.event,
-          eventExtraction,
-        )
-          .then(message => {
-            callback(message);
-          })
-          .catch(console.log);
-      }
 
-      if (event.getType() !== 'm.room.message') {
-        return;
-      }
-
-      console.log('=======> onMessageReceive', event);
-
-      // we are only intested in messages from the test room, which start with "!"
-      if (event.getRoomId() === roomId) {
-        if (event.sender.userId == !this.userId) {
-          let setRoomReadMarker = await client.setRoomReadMarkers(
-            roomId,
-            event.event_id,
-            event,
-          );
-          console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
-        }
-        this.extractMessageFromEvent(event)
+        this.extractMessageFromMatrixEvent(eventHandled)
           .then(message => {
             callback(message, event, this.userId);
           })
           .catch(console.log);
       }
+
+      if (event.event.type === 'm.room.message') {
+        // we are only intested in messages from the test room, which start with "!"
+        if (event.getRoomId() === roomId) {
+          if (event.sender.userId == !this.userId) {
+            let setRoomReadMarker = await client.setRoomReadMarkers(
+              roomId,
+              event.event_id,
+              event,
+            );
+            console.log('Room Read Marker FROM ON RECIEVE', setRoomReadMarker);
+          }
+          this.extractMessageFromEvent(event)
+            .then(message => {
+              callback(message, event, this.userId);
+            })
+            .catch(console.log);
+        }
+      }
     });
   }
 
-  async onGlobalMessageRecieve(callback) {
-    if (!callback) {
-      throw new Error(`No callback provided`);
-    }
+  async onGlobalListener(callback) {
+    // if (!callback) {
+    //   throw new Error(`No callback provided`);
+    // }
     const client = await this.getClient();
-    client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
-      if (event.getType() !== 'm.room.message') {
-        return;
+    const userId = this.userId;
+    const deviceId = this.deviceId;
+    client.on('toDeviceEvent', async function (event, room) {
+      // console.log('Device Listener ->', event);
+
+      if (event.getType() === 'm.room_key_request') {
+        console.log('Device Listener ->  m.room_key_request', event);
+        const contentMap = {
+          messages: {
+            [userId]: {
+              [deviceId]: {...event.event.content},
+            },
+          },
+        };
+        client.sendToDevice('m.forwarded_room_key', contentMap);
       }
 
-      console.log('=======> onMessageReceive', event);
+      if (event.getType() === 'm.key.verification.request') {
+        console.log('Device Listener ->  m.key.verification.request', event);
+        console.log(
+          'Device Listener ->  m.key.verification.request',
+          event.verificationRequest,
+        );
 
-      // we are only intested in messages from the test room, which start with "!"
-      this.extractMessageFromEvent(event)
-        .then(message => {
-          callback(message, event, this.userId);
-        })
-        .catch(console.log);
+        // client.sendToDevice('m.key.verification.ready', {
+        //   // messages: {
+        //   [userId]: {
+        //     [deviceId]: {...event.event.content},
+        //   },
+        //   // },
+        // });
+
+        // client.sendToDevice('m.key.verification.start', {
+        //   // messages: {
+        //   [userId]: {
+        //     [deviceId]: {...event.event.content},
+        //   },
+        //   // },
+        // });
+
+        // if (callback && event.verificationRequest) {
+        callback(event.verificationRequest);
+
+        // }
+      }
+
+      // if (event.getType() === 'm.key.verification.ready') {
+      //   console.log('Device Listener ->  m.key.verification.ready', event);
+      //   client.sendToDevice('m.key.verification.start', {
+      //     // messages: {
+      //     [userId]: {
+      //       [deviceId]: {...event.event.content},
+      //     },
+      //     // },
+      //   });
+      // }
+
+      // if (event.getType() === 'm.key.verification.start') {
+      //   console.log('Device Listener ->  m.key.verification.start', event);
+      //   client.sendToDevice('m.key.verification.accept', {
+      //     // messages: {
+      //     [userId]: {
+      //       [deviceId]: {...event.event.content},
+      //     },
+      //     // },
+      //   });
+      // }
+
+      // if (event.getType() === 'm.key.verification.accept') {
+      //   console.log('Device Listener ->  m.key.verification.accept', event);
+
+      //   client.sendToDevice('m.key.verification.key', {
+      //     // messages: {
+      //     [userId]: {
+      //       [deviceId]: {...event.event.content},
+      //     },
+      //     // },
+      //   });
+      // }
+
+      // if (event.getType() === 'm.key.verification.key') {
+      //   console.log('Device Listener ->  m.key.verification.key', event);
+      //   client.sendToDevice('m.key.verification.key', {
+      //     // messages: {
+      //     [userId]: {
+      //       [deviceId]: {...event.event.content},
+      //     },
+      //     // },
+      //   });
+      // }
+
+      // if (event.getType() === 'm.key.verification.mac') {
+      //   console.log('Device Listener ->  m.key.verification.mac', event);
+      //   client.sendToDevice('m.key.verification.mac', {
+      //     // messages: {
+      //     [userId]: {
+      //       [deviceId]: {...event.event.content},
+      //     },
+      //     // },
+      //   });
+      // }
+
+      // if (event.getType() === 'm.key.verification.done') {
+      //   console.log('Device Listener ->  m.key.verification.done', event);
+      //   client.sendToDevice('m.key.verification.done', {
+      //     // messages: {
+      //     [userId]: {
+      //       [deviceId]: {...event.event.content},
+      //     },
+      //     // },
+      //   });
+      // }
     });
+  }
+
+  async requestRoomKeys(roomId, event) {
+    const client = await this.getClient();
+    const room = client.getRoom(roomId);
+    const userId = this.userId;
+    const deviceId = this.deviceId;
+    const sessionId = client.getSessionId();
+    const senderkey = client.getDeviceCurve25519Key();
+    const members = room.getMembers().map(user => ({
+      userId: user.userId,
+      deviceId: client.getStoredDevicesForUser(user.userId)[0].deviceId,
+    }));
+
+    const roomKeyRequest = {
+      algorithm: 'm.megolm.v1.aes-sha2',
+      room_id: roomId,
+      session_id: sessionId,
+      sender_key: senderkey,
+      recipients: members,
+    };
+
+    console.log('Sender Key', roomKeyRequest);
+
+    const res = await client.crypto.requestRoomKey(
+      roomKeyRequest,
+      members,
+      true,
+    );
+    console.log('RES', res);
   }
 
   _extractPresenseFromContent(userId, content) {
@@ -1014,25 +1341,25 @@ export default class MatrixService {
     return uploadResponse;
   }
 
-  async sendToDeviceForwardKeys(event) {
-    const client = await this.getClient();
-    if (!this.userId || this.deviceId) {
-      conosle.log(
-        'sendToDeviceForwardKeys: error -> userId || deviceId is undefined',
-      );
-      return;
-    }
-    const res = client.sendToDevice('m.forwarded_room_key', {
-      user: this.userId,
-      deviceId: this.deviceId,
-      content: {
-        ...event.body,
-        forwarding_curve25519_key_chain: event.forwarding_curve25519_key_chain,
-        sender_claimed_ed25519_key: event.senderCurve25519Key,
-      },
-    });
-    console.log('the res by forwarding keys', res);
-  }
+  // async forwardDeviceKeys(event) {
+  //   const client = await this.getClient();
+  //   if (!this.userId || !this.deviceId) {
+  //     conosle.log(
+  //       'sendToDeviceForwardKeys: error -> userId || deviceId is undefined',
+  //     );
+  //     return;
+  //   }
+  //   const res = await client.sendToDevice('m.forwarded_room_key', {
+  //     user: this.userId,
+  //     deviceId: this.deviceId,
+  //     content: {
+  //       ...event.body,
+  //       forwarding_curve25519_key_chain: event.forwarding_curve25519_key_chain,
+  //       sender_claimed_ed25519_key: event.senderCurve25519Key,
+  //     },
+  //   });
+  //   console.log('the res by forwarding keys', res);
+  // }
 
   async onReadLatestEvent(event) {
     let client = await this.getClient();
@@ -1077,14 +1404,14 @@ export default class MatrixService {
       const devices = client.getStoredDevicesForUser(member.userId);
       for (const device of devices) {
         if (device.isUnverified()) {
-          await this.verifyDevice(member.userId, device.deviceId);
+          await this.verifyDevice(client, member.userId, device.deviceId);
         }
       }
     }
   }
 
-  async verifyDevice(userId, deviceId) {
-    let client = await this.getClient();
+  async verifyDevice(client, userId, deviceId) {
+    // let client = await this.getClient();
     if (!userId || typeof userId !== 'string') {
       throw new Error('"userId" is required and must be a string.');
     }
@@ -1101,47 +1428,167 @@ export default class MatrixService {
     try {
       let user = username;
       console.log('Logging in as %s on %s', user, this.host);
-      let client = await sdk.createClient(this.host);
+      let client = sdk.createClient({
+        baseUrl: this.host,
+        fetchFn: (url, args) => {
+          const uri = new URL(url);
+          const searchParams = new URLSearchParams(uri);
+          searchParams.delete('_');
+          return fetch(url, args);
+        },
+        // cryptoCallbacks: {getSecretStorageKey: this.custom_getSecretStorageKey},
+        ...MATRIX_CLIENT_START_OPTIONS,
+      });
+
+      // client.cryptoCallbacks.getSecretStorageKey =
+      //   this.custom_getSecretStorageKey;
       console.log('Logging in to created client...', client);
-      // let user = await client.login('m.login.password', {
-      //   user: username,
-      //   password: password,
-      //   userId: matrixCredentials.matrixUserId,
-      // });
-      const response = await client.login('m.login.password', {
+
+      const users = await getAllUsersFromDatabase();
+
+      const userDB = users.filter(u => u.userId == `@${username}:localhost`);
+
+      let account = null;
+      let newAccountLogin = null;
+
+      console.log('User FROM DB', userDB[0]);
+      if (!userDB.length) {
+        return Alert.alert('User does not exist, please register!');
+      }
+
+      account = {...userDB[0], id: userDB[0].id};
+
+      let devices = [...account.devices];
+
+      const checkIfNativeDeviceIdMatches = devices.filter(
+        dec => dec.nativeDeviceId == getDeviceID(),
+      );
+
+      // Old Way
+
+      // if (!checkIfNativeDeviceIdMatches.length) {
+      //   newAccountLogin = await client.login('m.login.password', {
+      //     user: username,
+      //     password: password,
+      //   });
+
+      //   account.accessToken = newAccountLogin.access_token;
+      //   account.deviceId = newAccountLogin.device_id;
+      //   devices.push({
+      //     accessToken: newAccountLogin.access_token,
+      //     deviceId: newAccountLogin.device_id,
+      //     nativeDeviceId: getDeviceID(),
+      //   });
+      // } else {
+      //   account.accessToken = account.devices.filter(
+      //     dec => dec.nativeDeviceId == getDeviceID(),
+      //   )[0].accessToken;
+      //   account.deviceId = account.devices.filter(
+      //     dec => dec.nativeDeviceId == getDeviceID(),
+      //   )[0].deviceId;
+      // }
+
+      // New Way
+
+      let deviceId = null;
+
+      if (checkIfNativeDeviceIdMatches.length) {
+        deviceId = devices.filter(dec => dec.nativeDeviceId == getDeviceID())[0]
+          .deviceId;
+      }
+
+      // if (!checkIfNativeDeviceIdMatches.length) {
+      newAccountLogin = await client.login('m.login.password', {
         user: username,
         password: password,
-        // refresh_token: true,
+        device_id: deviceId ? deviceId : null,
       });
-      console.log(
-        'Logging in again with device ID... ',
-        JSON.stringify(response),
-      );
-      client = await sdk.createClient(
-        this.host,
-        response.access_token,
-        response.user_id,
-        response.device_id,
-      );
 
-      this.client = client;
-      this.user = response;
-      this.userId = response.user_id;
+      console.log('NEW ACCOUNT LOGIN', newAccountLogin);
 
-      const data = {
-        userId: response.user_id,
-        accessToken: response.access_token,
-        homeserver: this.host,
-        deviceId: response.device_id,
-        crypto: true,
-        ...response,
+      account.accessToken = newAccountLogin.access_token;
+      account.deviceId = newAccountLogin.device_id;
+
+      // if (checkIfNativeDeviceIdMatches.length && newAccountLogin) {
+      const updateDevice = {
+        deviceId: deviceId ? deviceId : newAccountLogin.device_id,
+        nativeDeviceId: getDeviceID(),
+        accessToken: newAccountLogin.access_token,
       };
 
-      this.init(data);
+      const indexToUpdate = devices.findIndex(
+        mx => mx.nativeDeviceId === getDeviceID(),
+      );
+      console.log('Index to update', indexToUpdate);
 
-      // await this._setData(data);
+      if (indexToUpdate > -1) {
+        devices[indexToUpdate] = updateDevice;
+      } else {
+        devices.push(updateDevice);
+      }
+      // }
 
-      return data;
+      console.log('updated devices', devices);
+
+      // if (!checkIfNativeDeviceIdMatches&& newAccountLogin) {
+      //   devices.push({
+      //     accessToken: newAccountLogin.access_token,
+      //     deviceId: newAccountLogin.device_id,
+      //     nativeDeviceId: getDeviceID(),
+      //   });
+      // }
+
+      //   devices.push({
+      //     accessToken: newAccountLogin.access_token,
+      //     deviceId: newAccountLogin.device_id,
+      //     nativeDeviceId: getDeviceID(),
+      //   });
+      // } else {
+      // account.accessToken = account.devices.filter(
+      //   dec => dec.nativeDeviceId == getDeviceID(),
+      // )[0].accessToken;
+      //   account.deviceId = account.devices.filter(
+      //     dec => dec.nativeDeviceId == getDeviceID(),
+      //   )[0].deviceId;
+      // }
+
+      console.log('Devices', devices);
+
+      account.devices = devices;
+
+      // let data = {
+      //   userId: registerUser.user_id,
+      //   crypto: true,
+      //   error: false,
+      //   devices: [
+      //     {
+      //       accessToken: registerUser.access_token,
+      //       deviceId: registerUser.device_id,
+      //       nativeDeviceId: getDeviceID(),
+      //     },
+      //   ],
+      //   // accessToken: registerUser.access_token,
+      //   // deviceId: registerUser.device_id,
+      // };
+
+      // if (newAccountLogin) {
+      //   account.deviceId = newAccountLogin.device_id;
+      //   account.device_id = newAccountLogin.device_id;
+      //   account.access
+      // }
+
+      console.log('Logging In', account);
+
+      this.client = client;
+      this.user = account;
+      this.userId = account.user_id;
+
+      if (account) {
+        this.init(account);
+        account.error = false;
+      }
+
+      return account;
     } catch (e) {
       console.log('Error logging in:', e);
       const data = {};
@@ -1170,6 +1617,598 @@ export default class MatrixService {
       return data;
     }
   }
+
+  // NEW METHODS =====================>
+
+  async extractMessageFromMatrixEvent(event) {
+    // if (
+    //   event.getType() !== 'm.room.message' ||
+    //   event.getType() !== 'm.room.encrypted'
+    // ) {
+    //   return null;
+    // }
+
+    let content = event.getContent();
+    let messageType = this.toMessageType(content.msgtype);
+
+    let userId = event.getSender();
+    let user = await this.getUserProfile(userId);
+
+    let message = await this.extractMessageContents(content, messageType);
+    message.message = content.body;
+    message.datetime = event.getDate();
+    message.room = event.getRoomId();
+    message.id = event.getId();
+    message.from = user;
+
+    return message;
+  }
+
+  async handleEvent(event) {
+    const client = await this.getClient();
+    if (!client) {
+      return conosle.log('Client Not Present');
+    }
+
+    let matrixEvent = new MatrixEvent(event);
+    // console.log('THE MATRIX EVENT', matrixEvent);
+    if (event.type === 'm.room.encrypted') {
+      try {
+        let decryptedEvent = await client.crypto.decryptEvent(matrixEvent);
+        // console.log('THE DECRYPTED EVENT: NEW METHOD', decryptedEvent);
+        matrixEvent.claimedEd25519Key = decryptedEvent.claimedEd25519Key;
+        matrixEvent.clearEvent = decryptedEvent.clearEvent;
+        matrixEvent.forwardingCurve25519KeyChain =
+          decryptedEvent.forwardingCurve25519KeyChain;
+        matrixEvent.senderCurve25519Key = decryptedEvent.senderCurve25519Key;
+        matrixEvent.untrusted = decryptedEvent.untrusted;
+      } catch (e) {
+        // console.log('THE EVENT HAS ISSUES', e);
+        matrixEvent.claimedEd25519Key = null;
+        matrixEvent.clearEvent = {
+          content: {body: `Unable to decrypt message ${e}`, msgtype: 'm.text'},
+          room_id: event.room_id,
+          type: 'm.room.message',
+        };
+        matrixEvent.forwardingCurve25519KeyChain = null;
+        matrixEvent.senderCurve25519Key = null;
+        matrixEvent.untrusted = undefined;
+      }
+      // TODO: ENCRYPTED ATTACHMENTS: Handle encrypted attachments on recieve and listing
+
+      // try {
+      //   if (
+      //     matrixEvent.clearEvent &&
+      //     matrixEvent.clearEvent.content &&
+      //     matrixEvent.clearEvent.content.msgtype == 'm.image'
+      //   ) {
+      //     // Alert.alert('Hey');
+      //     const decryptedFile = await decryptFile(
+      //       this.client,
+      //       matrixEvent.clearEvent.content.file,
+      //     );
+      //     console.log('decryptedFile-Image', decryptedFile, matrixEvent);
+      //     matrixEvent.clearEvent.content.url = decryptedFile;
+      //   }
+      // } catch (error) {
+      //   console.log('Error in decrypting atatchment', error);
+      // }
+    }
+
+    return matrixEvent;
+  }
+
+  async extractEventsInitialFromSync(allEvents) {
+    const messageEvents = allEvents.filter(
+      event =>
+        event.type == 'm.room.message' || event.type == 'm.room.encrypted',
+    );
+    const matrixEvents = messageEvents.map(event => this.handleEvent(event));
+    const resolveMatrixEvents = await Promise.all(matrixEvents);
+    console.log('THE MESAAGES', resolveMatrixEvents);
+    const extractMessageFromMatrixEvents = resolveMatrixEvents.map(event =>
+      this.extractMessageFromMatrixEvent(event),
+    );
+    const resolveExtractedMessagesFromMatrixEvent = await Promise.all(
+      extractMessageFromMatrixEvents,
+    );
+    console.log(
+      'THE RESOLVED EXTACTED MESSAGES',
+      resolveExtractedMessagesFromMatrixEvent,
+      extractMessageFromMatrixEvents,
+    );
+    return resolveExtractedMessagesFromMatrixEvent;
+  }
+
+  async createRoom(opts) {
+    console.log('In Service CreateRooom', opts);
+    const client = await this.getClient();
+    const optsRoom = {
+      name: opts.name,
+      invite: opts.members,
+      visibility: opts.visibility,
+    };
+
+    const roomId = await client.createRoom(optsRoom, opts.callback);
+    console.log('Room Id in room creation', roomId);
+    // if (roomId && opts.enableEncryption) {
+    //   client.setRoomEncryption(roomId, {algorithm: 'm.megolm.v1.aes-sha2'});
+    // }
+    if (opts && opts.callbackRoom) {
+      opts.callbackRoom(roomId);
+    }
+    return roomId;
+  }
+
+  async registerAccount(username, password) {
+    const client = await this.getClient();
+    try {
+      const registerUser = await client.register(username, password);
+      return registerUser;
+    } catch (e) {
+      console.log('Error in Registration', e.data);
+      let registerUser = await client.register(
+        username,
+        password,
+        e.data.session,
+        {
+          session: e.data.session,
+          type: e.data.flows[0].stages[0],
+        },
+      );
+
+      const encryptedPassword = encryptPassword(password);
+      console.log('ENCRYPTED', encryptedPassword);
+      // const decryptedPassowrd = decryptPassword(encryptedPassword);
+      // console.log('DECRYPTED', decryptedPassowrd);
+
+      let data = {
+        userId: registerUser.user_id,
+        password: encryptedPassword,
+        crypto: true,
+        error: false,
+        devices: [
+          {
+            accessToken: registerUser.access_token,
+            deviceId: registerUser.device_id,
+            nativeDeviceId: getDeviceID(),
+          },
+        ],
+      };
+
+      let response = await client.login('m.login.password', {
+        user: username,
+        password: password,
+        device_id: registerUser.device_id,
+      });
+
+      console.log('RESPONE LOGIN', response);
+      data.devices.filter(
+        dec => dec.nativeDeviceId == getDeviceID(),
+      )[0].accessToken = response.access_token;
+
+      data.accessToken = response.access_token;
+      data.deviceId = registerUser.device_id;
+
+      this.init(data);
+
+      return data;
+    }
+  }
+
+  async searchUsers(query) {
+    const preciseQuery = `@${query}:localhost`;
+    const client = await this.getClient();
+    let users = await client.searchUserDirectory({
+      term: preciseQuery,
+      limit: 100,
+    });
+
+    if (users.results.length == 0) {
+      users = client.getUsers();
+    }
+    console.log('Users from homeserver', users);
+    if (users && users.results) {
+      return users.results;
+    }
+    const filteredUsers = users.filter(ux => ux.userId !== this.userId);
+    return filteredUsers;
+  }
+
+  // New E2E Setup -----
+
+  async sendVerificationRequest(
+    setIsVisible,
+    setEmojies,
+    callback,
+    verificationRequest,
+  ) {
+    const client = await this.getClient();
+    const device = client.getStoredDevice(this.userId, this.deviceId);
+    console.log('Device ', device);
+    console.log('Device Verification', !device.isUnverified());
+
+    let currentVerificationRequest = null;
+
+    if (!device.isUnverified()) {
+      // Alert.alert('Comes here verification');
+
+      if (!verificationRequest) {
+        currentVerificationRequest = await client.requestVerification(
+          this.userId,
+        );
+        console.log('Current Verification Request', currentVerificationRequest);
+      }
+
+      // this.sendVerification(this.userId);
+
+      if (verificationRequest) {
+        console.log('Incoming Verification Request', verificationRequest);
+        currentVerificationRequest = verificationRequest;
+      }
+
+      const verification = await StartVerification(currentVerificationRequest);
+      console.log('whatIs', verification);
+
+      if (verification.challenge.length) {
+        console.log("Let's Is", verification.challenge);
+        setIsVisible(true);
+        setEmojies(verification.challenge);
+      }
+
+      if (callback) {
+        callback(verification, true);
+      }
+    }
+  }
+
+  // async sendVerification(userId: string) {
+  //   //Upon detecting unverified sessions, the target's user ID is called with this function
+  //   const req = await this.client.requestVerification(userId); //Send verification
+  //   // await req.waitFor(() => req.started || req.cancelled); //Wait until it is cancelled or accepted
+  //   if (req.cancelled) console.log('Verification cancelled by user.');
+  //   else await this.verificationHandler(req);
+  // }
+
+  async verificationHandler(req: VerificationRequest) {
+    //This is also used upon receiving a verification request initiated by the other party
+    if (!req.verifier) {
+      if (!req.initiatedByMe) {
+        req.beginKeyVerification(verificationMethods.SAS);
+        await req.accept(); //Accept if not started by us
+      } else await req.waitFor(() => req.started || req.cancelled);
+      if (req.cancelled) {
+        await console.log('Verification cancelled.');
+        return;
+      }
+    }
+
+    req.verifier.once(SasEvent.ShowSas, async (e: ISasEvent) => {
+      //When it is time to show SAS
+      if (e.sas.decimal) console.log(`Decimal: ${e.sas.decimal.join(', ')}`);
+      if (e.sas.emoji) {
+        let emojis = [];
+        for (const emoji of e.sas.emoji)
+          emojis.push(`${emoji[0]} (${emoji[1]})`);
+        console.log(`Emojis are here: ${emojis.join(', ')}`);
+      }
+      console.log('Vv ');
+    });
+    try {
+      await req.verifier.verify(); //Start SAS verification, this is where error is thrown
+      console.log('Verification successful.');
+    } catch (e) {
+      console.log('Verification cancelled.');
+      console.log(e); //This is where the error gets printed
+      return;
+    }
+  }
+
+  async custom_getSecretStorageKey({keys: keyInfos}) {
+    const keypharse = 'secure!@#$%12345%';
+
+    const client = await this.getClient();
+    if (!keypharse) return null;
+
+    let keyId = await client.getDefaultSecretStorageKeyId(); //MatrixClient
+
+    let keyInfo;
+    if (keyId) {
+      keyInfo = keyInfos[keyId];
+      if (!keyInfo) {
+        keyId = null;
+      }
+    }
+
+    if (!keyId) {
+      const keyInfoEntries = Object.entries(keyInfos);
+      if (keyInfoEntries.length > 1) {
+        throw new Error('Multiple storage key requests not implemented');
+      }
+      [keyId, keyInfo] = keyInfoEntries[0];
+    }
+
+    if (!keyInfo) return null;
+
+    const derivedKey = await deriveKey(
+      keypharse,
+      keyInfo.passphrase.salt,
+      keyInfo.passphrase.iterations,
+    );
+
+    return [keyId, derivedKey];
+  }
+
+  async getBackup() {
+    const client = await this.getClient();
+
+    try {
+      let backup = await client.checkKeyBackup();
+      // await client.enableKeyBackup(backup.backupInfo);
+      console.log('KEY BACKUP - checkKeyBackup', backup);
+      if (!backup.backupInfo) {
+        console.log('KEY BACKUP - createSecureBackup');
+        return this.createSecureBackup(client);
+        // throw new Error('Backup broken or not there');
+      }
+      console.log('KEY BACKUP - retrivedBackup');
+      // return this.createSecureBackup(client);
+      return backup;
+    } catch (e) {
+      console.log('ERROR OR RETRIVEING BACKUP', e);
+    }
+  }
+
+  async restoreBackup(backup, passphrase) {
+    const client = await this.getClient();
+    // if (client.isValidRecoveryKey(passphrase)) {
+    //   alert('VALID KEY');
+    // }
+
+    if (
+      backup.backupInfo.auth_data?.private_key_salt &&
+      backup.backupInfo.auth_data?.private_key_iterations
+    ) {
+      const backupWithPassword = await client.restoreKeyBackupWithPassword(
+        passphrase,
+        undefined,
+        undefined,
+        backup.backupInfo,
+        {},
+      );
+      console.log(
+        'KEY BACKUP - restoreKeyBackupWithPassword',
+        backupWithPassword,
+      );
+      alert('Backup Restored: withPassword!');
+    } else {
+      console.log('KEY BACKUP - enableKeybackup');
+      try {
+        await client.enableKeyBackup(backup.backupInfo);
+        // const backupWithPassword = await client.restoreKeyBackupWithPassword(
+        //   passphrase,
+        //   undefined,
+        //   undefined,
+        //   backup.backupInfo,
+        //   {},
+        // );
+
+        // console.log(
+        //   'KEY BACKUP - restoreKeyBackupWithPassword - enableKeyBackup',
+        //   backupWithPassword,
+        // );
+        if (!backup.trustInfo.usable) {
+          // this will also set trust usable and local trust true.
+          const recoverInfo = await client.restoreKeyBackupWithSecretStorage(
+            backup.backupInfo,
+            undefined,
+            undefined,
+          );
+          console.log('RECOVER INFO', recoverInfo);
+        }
+        alert('Backup Restored: Enabled & withSecretStorage!');
+      } catch (e) {
+        console.error('Error in restore backup', e);
+      }
+    }
+  }
+
+  async createSecureBackup() {
+    const client = await this.getClient();
+    const keypharse = 'secure!@#$%12345%';
+    // const client = await this.getClient();
+    console.log('KEY BACKUP - keypharse', keypharse);
+    const prepareKeybackup = await client.prepareKeyBackupVersion(keypharse);
+    console.log('KEY BACKUP - prepareKeyBackupVersion', prepareKeybackup);
+    const newKeybackup = await client.createKeyBackupVersion(prepareKeybackup);
+    console.log('KEY BACKUP - createKeyBackupVersion', newKeybackup);
+    alert('Backup Created!');
+    return newKeybackup;
+  }
+
+  async setAndEnableBackup() {
+    const client = await this.getClient();
+    const keypharse = 'secure!@#$%12345%';
+    if (!client) {
+      return alert('Client does not exist');
+    }
+    const backup = await this.getBackup();
+    if (backup && backup.backupInfo) {
+      this.restoreBackup(backup, keypharse);
+    }
+  }
+
+  async sendBackupToServer() {
+    const client = await this.getClient();
+    const backup = await client.getKeyBackupVersion();
+    const backupKeys = client.getKeyBackupEnabled();
+    const getBackup = await client.getKeyBackupVersion();
+    // const keyBackup = await client.key
+    console.log('KEY BACK SAVE', backup, backupKeys, getBackup);
+
+    // const sendKeyBackup = client.sendKeyBackup();
+  }
+
+  async setupCrossing(matrixCredentials) {
+    console.log('In Cross Signing', matrixCredentials);
+    const client = await this.getClient();
+    const userId = this.userId;
+    try {
+      console.log(
+        'MatrixCredential',
+        matrixCredentials.password,
+        decryptPassword(matrixCredentials.password),
+      );
+
+      const bootstrapCrossSigning = await client.bootstrapCrossSigning({
+        // setupNewCrossSigning: true,
+        authUploadDeviceSigningKeys: async makeRequest => {
+          // Complying with the User-Interactive Authentication API of uploading device signing keys,
+          // we first make a request without the auth parameter and retrieve the session id (as well as authentication flow data).
+          // We use this session id to authenticate the API request the second time.
+          makeRequest().then(
+            () => {
+              throw new Error(
+                'Should never have arrived here with empty auth.',
+              );
+            },
+            async reason => {
+              let response_data = reason.data;
+              let auth_data = {
+                session: response_data.session,
+                type: 'm.login.password',
+                user: userId,
+                identifier: {
+                  type: 'm.id.user',
+                  user: userId,
+                },
+                password: decryptPassword(matrixCredentials.password),
+              };
+              makeRequest(auth_data).then(
+                () => {
+                  this.setupSecretStorage();
+                },
+                err => {
+                  throw new Error(
+                    'Failed to upload device signing keys with error: ' + err,
+                  );
+                },
+              );
+            },
+          );
+        },
+      });
+      console.log('bootstrapCrossSigning', bootstrapCrossSigning);
+    } catch (error) {
+      console.log('Error Setting Cross Signing', error);
+      alert('Crossing Incomplete, Error');
+    }
+  }
+
+  async getCrossSigningInfo(matrixCredentials) {
+    const client = await this.getClient();
+    const isCrossSigningReady = await client.isCrossSigningReady();
+    console.log('isCrossSigningReady', isCrossSigningReady);
+    if (isCrossSigningReady) {
+      // this.setAndEnableBackup();
+      let backupInfo = await client.getKeyBackupVersion();
+      // bootstrapSecretStorage will invoke the function cryptoCallbacks.getSecretStorageKey, which you need to define. This function will have to promp the user to insert his Security Key
+      await client.bootstrapSecretStorage();
+      // enableKeyBackup tells the client to back up the keys it receives to the server
+      await client.enableKeyBackup(backupInfo);
+      // I am not sure if we could use the backupInfo from getKeyBackupVersion()
+      let response = await client.checkKeyBackup();
+      // restoreKeyBackupWithCache fetches the keys from the backup.
+      let recoverInfo = await client.restoreKeyBackupWithCache(
+        undefined,
+        undefined,
+        response.backupInfo,
+      );
+      console.log('RECOVER INFO', recoverInfo);
+      if (recoverInfo && recoverInfo.total > recoverInfo.imported) {
+        // Warnig (recoverInfo.total - recoverInfo.imported) sessions could not be recovered
+        console.log('Something bad');
+      }
+      return alert('Crossing already done!');
+    } else {
+      this.setupCrossing(matrixCredentials);
+    }
+  }
+
+  async setupSecretStorage() {
+    const client = await this.getClient();
+    const keypharse = 'secure!@#$%12345%';
+    const recoveryKey = client.createRecoveryKeyFromPassphrase(keypharse);
+
+    // Set callback that is required during the bootstrap process.
+    client.cryptoCallbacks.getCrossSigningKey = async () => recoveryKey;
+    // Setting up the secret storage:
+    // Signs the SSSS default key with master cross-signing key and device (for backwards compatibility of device-to-device verification).
+    // This step also uploads cross-signing keys to account_data.
+    await client.bootstrapSecretStorage({
+      createSecretStorageKey: async () => recoveryKey,
+      setupNewKeyBackup: true,
+      setupNewSecretStorage: true,
+    });
+    recoveryKey.then(val => {
+      console.log(val.encodedPrivateKey);
+    });
+
+    alert('Crossing Complete, Secret Key Generated');
+    // Device session no longer needed - logout.
+    // await client.logout();
+  }
+
+  async stopClientAndDeleteStores() {
+    try {
+      const client = await this.getClient();
+      console.log('Client', client);
+      const logout = await client.logout(true);
+      console.log('LOGGED OUT', logout);
+      this.userId = null;
+      this.accessToken = null;
+      this.deviceId = null;
+      return logout;
+    } catch (error) {
+      console.log('Hey Hey', error);
+    }
+  }
+
+  async clearStores() {
+    try {
+      const client = await this.getClient();
+      console.log('Client', client);
+      await client.clearStores();
+      // if (client.isLoggedIn()) {
+      //   return console.log('VALID');
+      // }
+      // const deletingStore = await client.store.deleteAllData();
+      // client.crypto.;
+      // console.log('DELETING STORES', deletingStore);
+    } catch (error) {
+      console.log('Error clearing stores', error);
+    }
+  }
+
+  // async logOut() {
+  //   try {
+  //     const client = await this.getClient();
+  //     // client.stopClient();
+  //     const clearStores = await client.clearStores();
+  //     // console.log('Stores Cleared', clearStores);
+  //     const deletingStore = await client.store.deleteAllData();
+  //     const deletetingCryptoStore =
+  //       await client.crypto.cryptoStore.deleteAllData();
+  //     console.log('DELETING STORES', deletingStore, deletetingCryptoStore);
+  //     client.this.ready = false;
+  //     this.client = null;
+  //     this.accessToken = null;
+  //     this.userId = null;
+  //     return clearStores;
+  //   } catch (error) {
+  //     console.log('Hey Hey', e);
+  //   }
+  // }
 }
 
 const ChatService = new MatrixService();

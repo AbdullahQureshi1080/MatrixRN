@@ -4,17 +4,19 @@ buildscript {
     ext {
        buildToolsVersion = "30.0.2"
         minSdkVersion = 21
-        compileSdkVersion = 30
-        targetSdkVersion = 30
+        compileSdkVersion = 31
+        targetSdkVersion = 31
         ndkVersion = "20.1.5948944"
 
     }
     repositories {
         google()
         jcenter()
+        mavenCentral()  // Maven Central repository
     }
     dependencies {
         classpath("com.android.tools.build:gradle:4.1.0")
+        classpath 'com.google.gms:google-services:4.3.15'
                 // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }
@@ -22,6 +24,23 @@ buildscript {
 
 allprojects {
     repositories {
+
+    exclusiveContent {
+            // We get React Native's Android binaries exclusively through npm,
+            // from a local Maven repo inside node_modules/react-native/.
+            // (The use of exclusiveContent prevents looking elsewhere like Maven Central
+            // and potentially getting a wrong version.)
+            filter {
+                includeGroup "com.facebook.react"
+            }
+            forRepository {
+                maven {
+                    // NOTE: if you are in a monorepo, you may have "$rootDir/../../../node_modules/react-native/android"
+                    url "$rootDir/../node_modules/react-native/android"
+                }
+            }
+        }
+
         mavenLocal()
         maven {
             // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
@@ -35,5 +54,6 @@ allprojects {
         google()
         jcenter()
         maven { url 'https://www.jitpack.io' }
+        mavenCentral()  // Maven Central repository
     }
 }

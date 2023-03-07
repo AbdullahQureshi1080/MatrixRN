@@ -6,6 +6,8 @@
  * @flow strict-local
  */
 
+import PolyfillCrypto from 'react-native-webview-crypto';
+
 import React, {useContext, useEffect, useReducer, useState} from 'react';
 import {ActivityIndicator, LogBox, View} from 'react-native';
 
@@ -16,7 +18,7 @@ import Rooms from './Screens/Rooms/Rooms';
 import Room from './Screens/Room/Room';
 import Register from './Screens/Auth/Register/Register';
 
-import {getUserMatrixData} from './Utils/Storage';
+import {getUserMatrixData, storeUserMatrixData} from './Utils/Storage';
 
 import {useObservableState} from 'observable-hooks';
 import {
@@ -30,6 +32,8 @@ import Screen from './Components/Screen/Screen';
 LogBox.ignoreAllLogs(true);
 
 import ChatService from './Services/MatrixChatService';
+import {getUserFromDatabase} from './database/db';
+import {getDeviceID} from './Utils/Device';
 
 // let matrix = new MatrixService();
 
@@ -72,8 +76,16 @@ const App = props => {
     let userMD = await getUserMatrixData();
     console.log('THE USER MD DATA', userMD);
     if (userMD) {
-      setUserMatrixData(userMD);
-      // await dispatch({type: 'LOGGED_IN', data: []});
+      const user = await getUserFromDatabase(userMD.id);
+      let alteredRes = {...user};
+      alteredRes.accessToken = alteredRes.devices.filter(
+        dec => dec.nativeDeviceId == getDeviceID(),
+      )[0].accessToken;
+      alteredRes.deviceId = alteredRes.devices.filter(
+        dec => dec.nativeDeviceId == getDeviceID(),
+      )[0].deviceId;
+      setUserMatrixData(alteredRes);
+      storeUserMatrixData(alteredRes);
     }
   };
 
@@ -88,10 +100,31 @@ const App = props => {
       console.log('THE STORAGE DATA', userMatrixData);
       ChatService.init(userMatrixData);
       // }, 2000);
-
       return;
     }
   }, [userMatrixData]);
+
+  // useEffect(() => {
+  //   try {
+  //     console.log('The STORE IS UPDATED', store);
+  //     if (!store.data && !store.isAuthenticated) {
+  //       if (ChatService.client) {
+  //         console.log('CLient', ChatService.client);
+  //         console.log('On APP AGAIN');
+  //         ChatService.clearStores();
+  //         // indexedDB
+  //         //   .databases()
+  //         //   .then(r => {
+  //         //     for (var i = 0; i < r.length; i++) indexedDB.deleteDatabase(r[i].name);
+  //         //   })
+  //         //   .then(() => {
+  //         //   });
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.log('Error clearing stores', error);
+  //   }
+  // }, [store.isAuthenticated]);
 
   return (
     <NavigationContainer>
@@ -107,6 +140,7 @@ const App = props => {
 const APPWRAPPER = () => {
   return (
     <AppProvider>
+      <PolyfillCrypto />
       <App />
     </AppProvider>
   );

@@ -27,6 +27,7 @@ function appReducer(store = null, action) {
       return {
         ...store,
         isAuthenticated: false,
+        data: null,
       };
     default:
       throw new Error(`Unhandled action type: ${action.type}`);
