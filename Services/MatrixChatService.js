@@ -237,6 +237,8 @@ export default class MatrixService {
 
     console.log('THE THIS. CLIENT', this.client);
 
+    alert('Client Initialized');
+
     return client;
   }
 
@@ -1978,11 +1980,11 @@ export default class MatrixService {
         'KEY BACKUP - restoreKeyBackupWithPassword',
         backupWithPassword,
       );
+      alert('Backup Restored: withPassword!');
     } else {
       console.log('KEY BACKUP - enableKeybackup');
       try {
         await client.enableKeyBackup(backup.backupInfo);
-
         // const backupWithPassword = await client.restoreKeyBackupWithPassword(
         //   passphrase,
         //   undefined,
@@ -2004,6 +2006,7 @@ export default class MatrixService {
           );
           console.log('RECOVER INFO', recoverInfo);
         }
+        alert('Backup Restored: Enabled & withSecretStorage!');
       } catch (e) {
         console.error('Error in restore backup', e);
       }
@@ -2019,6 +2022,7 @@ export default class MatrixService {
     console.log('KEY BACKUP - prepareKeyBackupVersion', prepareKeybackup);
     const newKeybackup = await client.createKeyBackupVersion(prepareKeybackup);
     console.log('KEY BACKUP - createKeyBackupVersion', newKeybackup);
+    alert('Backup Created!');
     return newKeybackup;
   }
 
@@ -2097,6 +2101,7 @@ export default class MatrixService {
       console.log('bootstrapCrossSigning', bootstrapCrossSigning);
     } catch (error) {
       console.log('Error Setting Cross Signing', error);
+      alert('Crossing Incomplete, Error');
     }
   }
 
@@ -2124,7 +2129,7 @@ export default class MatrixService {
         // Warnig (recoverInfo.total - recoverInfo.imported) sessions could not be recovered
         console.log('Something bad');
       }
-      return;
+      return alert('Crossing already done!');
     } else {
       this.setupCrossing(matrixCredentials);
     }
@@ -2148,6 +2153,8 @@ export default class MatrixService {
     recoveryKey.then(val => {
       console.log(val.encodedPrivateKey);
     });
+
+    alert('Crossing Complete, Secret Key Generated');
     // Device session no longer needed - logout.
     // await client.logout();
   }
